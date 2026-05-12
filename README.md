@@ -19,6 +19,7 @@
   <a href="https://github.com/maziggy/bambuddy/issues"><img src="https://img.shields.io/github/issues/maziggy/bambuddy?style=flat-square" alt="Issues"></a>
   <a href="https://discord.gg/aFS3ZfScHM"><img src="https://img.shields.io/discord/1461241694715645994?style=flat-square&logo=discord&logoColor=white&label=Discord&color=5865F2" alt="Discord"></a>
   <a href="https://forum.bambuddy.cool"><img src="https://img.shields.io/badge/Forum-bambuddy.cool-00adef?style=flat-square&logo=discourse&logoColor=white" alt="Forum"></a>
+  <a href="https://github.com/sponsors/maziggy"><img src="https://img.shields.io/badge/GitHub_Sponsors-Sponsor-ea4aaa?style=flat-square&logo=github-sponsors&logoColor=white" alt="GitHub Sponsors"></a>
   <a href="https://ko-fi.com/maziggy"><img src="https://img.shields.io/badge/Ko--fi-Support-ff5e5b?style=flat-square&logo=ko-fi&logoColor=white" alt="Ko-fi" target=_blank></a>
 </p>
 
@@ -747,7 +748,14 @@ AGPL-3.0 License — see [LICENSE](LICENSE) for details.
 
 ---
 
-If you like Bambuddy and want to support it, you can <a href="https://ko-fi.com/maziggy" target=_blank>buy Martin a coffee</a>.
+## 💖 Support Bambuddy
+
+Bambuddy stays independent because real people support it directly. If Bambuddy makes your printers more useful, please consider:
+
+- **[GitHub Sponsors](https://github.com/sponsors/maziggy)** — five recurring tiers from $5/mo (Backer) to $500/mo (Corporate). Supporter+ ($15/mo) get access to a private sponsors space with a monthly newsletter and early release notes. Patron+ ($35/mo) vote on the quarterly roadmap. Sustaining Sponsor+ ($150/mo) get a direct async email line for technical questions. Corporate ($500/mo) get logo placement on [bambuddy.cool](https://bambuddy.cool) and [press.html](https://bambuddy.cool/press.html).
+- **[Ko-fi](https://ko-fi.com/maziggy)** — one-time tip or recurring.
+
+Sponsors get listed in [BACKERS.md](BACKERS.md). Need commercial support (SLA, multi-printer consulting)? Email `martin@bambuddy.cool`.
 
 ---
 
