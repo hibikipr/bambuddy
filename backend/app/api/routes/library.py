@@ -67,7 +67,6 @@ from backend.app.services.stl_thumbnail import generate_stl_thumbnail
 from backend.app.utils.threemf_tools import (
     extract_nozzle_mapping_from_3mf,
     extract_project_filaments_from_3mf,
-    extract_source_printer_model_from_3mf,
 )
 
 logger = logging.getLogger(__name__)
@@ -2419,22 +2418,11 @@ async def get_library_file_plates(
     except Exception as e:
         logger.warning("Failed to parse plates from library file %s: %s", file_id, e)
 
-    # SliceModal pre-check signal: the source 3MF's bound printer model. The
-    # CLI cannot re-slice for a different printer; surface this so the modal
-    # can warn the user before they pick a mismatched profile.
-    source_printer_model: str | None = None
-    try:
-        with zipfile.ZipFile(file_path, "r") as zf:
-            source_printer_model = extract_source_printer_model_from_3mf(zf)
-    except (zipfile.BadZipFile, OSError):
-        pass
-
     return {
         "file_id": file_id,
         "filename": lib_file.filename,
         "plates": plates,
         "is_multi_plate": len(plates) > 1,
-        "source_printer_model": source_printer_model,
     }
 
 

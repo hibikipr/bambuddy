@@ -189,7 +189,7 @@ function FilamentAnalysisSpinner({
     } else {
       showPersistentToast(
         toastId,
-        t('slice.previewToast', 'Analyzing {{name}} — {{elapsed}}', {
+        t('slice.previewToast', {
           name: prettyName,
           elapsed: elapsedStr,
         }),
@@ -206,7 +206,7 @@ function FilamentAnalysisSpinner({
   const inlineLabel =
     stage && typeof percent === 'number' && percent > 0
       ? `${stage} (${Math.min(100, Math.max(0, Math.round(percent)))}%)`
-      : t('slice.analyzingPlateFilaments', 'Analyzing plate filaments…');
+      : t('slice.analyzingPlateFilaments');
   return (
     <div className="flex flex-col gap-1 text-bambu-gray text-sm py-2">
       <div className="flex items-center gap-2">
@@ -425,7 +425,7 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
           bundleFilamentNames.length === 0 ||
           bundleFilamentNames.some((n) => n == null)
         ) {
-          throw new Error(t('slice.bundleAllRequired', 'Bundle process and every filament slot must be picked'));
+          throw new Error(t('slice.bundleAllRequired'));
         }
         const bundleSpec: SliceBundleSpec = {
           bundle_id: selectedBundle.id,
@@ -447,7 +447,7 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
           filamentPresets.length === 0 ||
           filamentPresets.some((r) => r == null)
         ) {
-          throw new Error(t('slice.allPresetsRequired', 'All presets must be selected'));
+          throw new Error(t('slice.allPresetsRequired'));
         }
         body = {
           printer_preset: printerPreset,
@@ -480,55 +480,20 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
     },
   });
 
-  // Pre-slice compatibility check: the slicer CLI (both OrcaSlicer and
-  // BambuStudio) cannot re-slice a 3MF for a printer different from the one
-  // it was originally bound to — the cross-printer "convert project" flow
-  // is desktop-Studio only. If we can match the source's printer model to a
-  // SliceModal-known model and the user's chosen printer profile names a
-  // different model, surface a warning before they click Slice.
-  //
-  // For bundle mode, the bundle's printer_preset_name plays the same role
-  // as the picked PresetRef's resolved name in preset mode.
-  const sourcePrinterModel = platesQuery.data?.source_printer_model ?? null;
-  const printerProfileName = isBundleMode
-    ? selectedBundle?.printer_preset_name.replace(/^# /, '') ?? null
-    : printerPreset
-      ? presetsQuery.data?.[printerPreset.source].printer.find((p) => p.id === printerPreset.id)?.name
-      : null;
-  // Profile names follow `<model> <nozzle> nozzle` (e.g. "Bambu Lab H2D 0.4
-  // nozzle"). The CLI compat check uses the model prefix; substring match
-  // catches both standard and locally-imported user-named profiles that
-  // include the model in the name. Cloud presets with arbitrary names
-  // (e.g. "My Custom X1C") fall through to no-warning, which is a
-  // reasonable default — the user picked it knowingly.
-  const printerMismatch =
-    !!sourcePrinterModel &&
-    !!printerProfileName &&
-    !printerProfileName.toLowerCase().includes(sourcePrinterModel.toLowerCase());
-
-  // Slice button stays disabled until *all* of these hold:
-  //   - the preview slice / embedded-metadata read has succeeded so we know
-  //     the per-plate filament slot list is final
-  //     (filamentReqsQuery.isSuccess). Without this gate the synthetic
-  //     single-slot fallback would auto-enable the button on opaque
-  //     defaults, before the slicer has even returned the real slot map.
-  //   - printer + process picked, every filament slot has a profile (the
-  //     auto-pick fills these once filamentSlots arrives)
-  //   - no printer-mismatch warning is up (clicking would silently fall
-  //     back to embedded settings and produce a wrong-printer file)
+  // Slice button stays disabled until the preview slice / embedded-metadata
+  // read has succeeded (filamentReqsQuery.isSuccess) and every filament slot
+  // has a picked profile.
   const isReady = isBundleMode
     ? selectedBundle != null &&
       bundleProcessName != null &&
       filamentReqsQuery.isSuccess &&
       bundleFilamentNames.length > 0 &&
-      bundleFilamentNames.every((n) => n != null) &&
-      !printerMismatch
+      bundleFilamentNames.every((n) => n != null)
     : printerPreset != null &&
       processPreset != null &&
       filamentReqsQuery.isSuccess &&
       filamentPresets.length > 0 &&
-      filamentPresets.every((r) => r != null) &&
-      !printerMismatch;
+      filamentPresets.every((r) => r != null);
   const isEnqueuing = enqueueMutation.isPending;
 
   // Step 1: plate picker for multi-plate 3MF sources. Cancelling closes the
@@ -563,7 +528,7 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
           <div className="min-w-0">
             <h3 className="text-white font-medium flex items-center gap-2">
               <Cog className="w-4 h-4" />
-              {t('slice.title', 'Slice model')}
+              {t('slice.title')}
             </h3>
             <p className="text-xs text-bambu-gray mt-1 truncate" title={source.filename}>
               {source.filename}
@@ -576,7 +541,7 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
             onClick={onClose}
             disabled={isEnqueuing}
             className="flex-shrink-0 text-bambu-gray hover:text-white transition-colors disabled:opacity-50"
-            aria-label={t('common.close', 'Close')}
+            aria-label={t('common.close')}
           >
             <X className="w-5 h-5" />
           </button>
@@ -590,7 +555,7 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
           {(platesQuery.isLoading || presetsQuery.isLoading) && (
             <div className="flex items-center gap-2 text-bambu-gray text-sm">
               <Loader2 className="w-4 h-4 animate-spin" />
-              {t('slice.loadingPresets', 'Loading presets…')}
+              {t('slice.loadingPresets')}
             </div>
           )}
 
@@ -624,7 +589,7 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
               {!isBundleMode && (
                 <>
                   <PresetDropdown
-                    label={t('slice.printer', 'Printer profile')}
+                    label={t('slice.printer')}
                     slot="printer"
                     data={presetsQuery.data}
                     value={printerPreset}
@@ -632,7 +597,7 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
                     disabled={isEnqueuing}
                   />
                   <PresetDropdown
-                    label={t('slice.process', 'Process profile')}
+                    label={t('slice.process')}
                     slot="process"
                     data={presetsQuery.data}
                     value={processPreset}
@@ -648,14 +613,14 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
                       verify the printer they're slicing for. */}
                   <div>
                     <label className="block text-sm text-bambu-gray mb-1">
-                      {t('slice.printer', 'Printer profile')}
+                      {t('slice.printer')}
                     </label>
                     <div className="px-3 py-2 rounded-md bg-bambu-dark/40 border border-bambu-dark-tertiary text-white text-sm">
                       {selectedBundle.printer_preset_name}
                     </div>
                   </div>
                   <BundleStringDropdown
-                    label={t('slice.process', 'Process profile')}
+                    label={t('slice.process')}
                     options={selectedBundle.process}
                     value={bundleProcessName}
                     onChange={setBundleProcessName}
@@ -691,12 +656,11 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
                       ? t('slice.filamentSlot', {
                           index: idx + 1,
                           type: slot.type,
-                          defaultValue: `Filament ${idx + 1} (${slot.type || ''})`,
                         })
-                      : t('slice.filament', 'Filament profile');
+                      : t('slice.filament');
                   const label = isUsed
                     ? baseLabel
-                    : `${baseLabel} ${t('slice.notUsedByPlate', '— not used by this plate')}`;
+                    : `${baseLabel} ${t('slice.notUsedByPlate')}`;
                   return (
                     <BundleStringDropdown
                       key={`bundle-filament-${idx}`}
@@ -732,12 +696,11 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
                       ? t('slice.filamentSlot', {
                           index: idx + 1,
                           type: slot.type,
-                          defaultValue: `Filament ${idx + 1} (${slot.type || ''})`,
                         })
-                      : t('slice.filament', 'Filament profile');
+                      : t('slice.filament');
                   const label = isUsed
                     ? baseLabel
-                    : `${baseLabel} ${t('slice.notUsedByPlate', '— not used by this plate')}`;
+                    : `${baseLabel} ${t('slice.notUsedByPlate')}`;
                   return (
                     <PresetDropdown
                       key={`filament-${idx}`}
@@ -763,20 +726,6 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
             </>
           )}
 
-          {printerMismatch && (
-            <div
-              className="text-sm text-amber-200 bg-amber-900/20 border border-amber-700/40 rounded p-2"
-              role="alert"
-            >
-              {t('slice.printerMismatch', {
-                source: sourcePrinterModel,
-                target: printerProfileName,
-                defaultValue:
-                  'This 3MF was sliced for {{source}}, but you picked {{target}}. The slicer CLI cannot re-slice a 3MF for a different printer — open the source in Bambu Studio, change the printer, and re-export.',
-              })}
-            </div>
-          )}
-
           {errorMessage && (
             <div className="text-sm text-red-400 bg-red-900/20 border border-red-900/40 rounded p-2" role="alert">
               {errorMessage}
@@ -792,7 +741,7 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
             disabled={isEnqueuing}
             className="px-3 py-1.5 text-sm rounded-md border border-bambu-dark-tertiary text-bambu-gray hover:text-white hover:border-bambu-gray transition-colors disabled:opacity-50"
           >
-            {t('common.cancel', 'Cancel')}
+            {t('common.cancel')}
           </button>
           <button
             type="button"
@@ -806,10 +755,10 @@ export function SliceModal({ source, onClose }: SliceModalProps) {
             {isEnqueuing ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                {t('slice.enqueuing', 'Submitting slice job…')}
+                {t('slice.enqueuing')}
               </>
             ) : (
-              t('slice.action', 'Slice')
+              t('slice.action')
             )}
           </button>
         </div>
@@ -885,7 +834,7 @@ function BedTypeDropdown({
   return (
     <label className="block">
       <span className="block text-xs text-bambu-gray mb-1">
-        {t('slice.bedType.label', 'Build plate')}
+        {t('slice.bedType.label')}
       </span>
       <select
         value={value ?? ''}
@@ -893,7 +842,7 @@ function BedTypeDropdown({
         disabled={disabled}
         className="w-full px-3 py-2 rounded-md bg-bambu-dark border border-bambu-dark-tertiary text-white text-sm focus:outline-none focus:border-bambu-gray disabled:opacity-50"
       >
-        <option value="">{t('slice.bedType.auto', 'Auto (use process preset)')}</option>
+        <option value="">{t('slice.bedType.auto')}</option>
         {BED_TYPE_OPTIONS.map((opt) => (
           <option key={opt.value} value={opt.value}>
             {t(opt.labelKey, opt.fallback)}
@@ -959,8 +908,8 @@ function PresetDropdown({ label, slot, data, value, onChange, disabled, swatchCo
       >
         <option value="">
           {totalEntries === 0
-            ? t('slice.noPresetsForSlot', 'No presets available')
-            : t('slice.selectPreset', '— Select a preset —')}
+            ? t('slice.noPresetsForSlot')
+            : t('slice.selectPreset')}
         </option>
         {sections.map((section) => (
           <optgroup key={section.tierLabel} label={section.tierLabel}>
@@ -992,7 +941,7 @@ function BundlePicker({ bundles, selectedId, onChange, disabled }: BundlePickerP
     <label className="block">
       <span className="block text-sm text-bambu-gray mb-1 inline-flex items-center gap-1.5">
         <Package className="w-3.5 h-3.5" />
-        {t('slice.bundle', 'Slicer bundle')}
+        {t('slice.bundle')}
       </span>
       <select
         value={selectedId ?? ''}
@@ -1001,7 +950,7 @@ function BundlePicker({ bundles, selectedId, onChange, disabled }: BundlePickerP
         className="w-full px-3 py-2 rounded-md bg-bambu-dark border border-bambu-dark-tertiary text-white text-sm focus:outline-none focus:border-bambu-gray disabled:opacity-50"
       >
         <option value="">
-          {t('slice.bundleNone', '— None (pick presets individually) —')}
+          {t('slice.bundleNone')}
         </option>
         {bundles.map((b) => (
           <option key={b.id} value={b.id}>
@@ -1056,8 +1005,8 @@ function BundleStringDropdown({
       >
         <option value="">
           {options.length === 0
-            ? t('slice.noPresetsForSlot', 'No presets available')
-            : t('slice.selectPreset', '— Select a preset —')}
+            ? t('slice.noPresetsForSlot')
+            : t('slice.selectPreset')}
         </option>
         {options.map((name) => (
           <option key={name} value={name}>
