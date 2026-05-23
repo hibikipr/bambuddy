@@ -29,6 +29,7 @@ If you sponsor and your name isn't here within 48h, please write an email to mar
 - [@rstocks](https://github.com/rstocks)
 - [@sixfootseven](https://github.com/sixfootseven)
 - [@pwostran](https://github.com/pwostran)
+- [@MethodicalMartian](https://github.com/MethodicalMartian)
 
 ## Backers ($5/mo+)
 
