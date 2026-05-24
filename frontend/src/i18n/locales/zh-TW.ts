@@ -3042,6 +3042,11 @@ export default {
     collectItem10: 'Python 套件版本',
     collectItem11: '資料庫健康檢查',
     collectItem12: 'Docker 環境詳情',
+    bundleGenerating: '正在產生套件...',
+    bundleStepConnection: '正在執行印表機連線檢查',
+    bundleStepVirtualPrinters: '正在執行虛擬印表機設定檢查',
+    bundleStepLogScan: '正在掃描最近的日誌以尋找已知問題',
+    bundleStepBuild: '正在建立支援套件 ZIP 檔案',
   },
 
   // File manager
@@ -5668,6 +5673,10 @@ export default {
     maxDuration: '{{minutes}} 分鐘後自動停止',
     stoppingLogs: '正在收集日誌並提交...',
     submitting: '正在提交錯誤報告...',
+    submittingStepConnection: '正在執行印表機連線檢查',
+    submittingStepVirtualPrinters: '正在執行虛擬印表機設定檢查',
+    submittingStepLogScan: '正在掃描最近的日誌以尋找已知問題',
+    submittingStepSubmit: '正在將報告提交至 GitHub',
     submitSuccess: '錯誤報告提交成功！',
     submitFailed: '提交錯誤報告失敗',
     diagnosticChecking: '正在檢查印表機連線...',

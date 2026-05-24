@@ -3054,6 +3054,11 @@ export default {
     collectItem10: 'Python-Paketversionen',
     collectItem11: 'Datenbankzustandsprüfungen',
     collectItem12: 'Docker-Umgebungsdetails',
+    bundleGenerating: 'Bundle wird erstellt...',
+    bundleStepConnection: 'Drucker-Verbindungsprüfungen werden ausgeführt',
+    bundleStepVirtualPrinters: 'Setup-Prüfungen für virtuelle Drucker werden ausgeführt',
+    bundleStepLogScan: 'Aktuelle Protokolle werden auf bekannte Probleme überprüft',
+    bundleStepBuild: 'Support-Bundle-ZIP wird erstellt',
   },
 
   // File manager
@@ -5680,6 +5685,10 @@ export default {
     maxDuration: 'Stoppt automatisch nach {{minutes}} Min.',
     stoppingLogs: 'Protokolle sammeln & senden...',
     submitting: 'Fehlerbericht wird gesendet...',
+    submittingStepConnection: 'Drucker-Verbindungsprüfungen werden ausgeführt',
+    submittingStepVirtualPrinters: 'Setup-Prüfungen für virtuelle Drucker werden ausgeführt',
+    submittingStepLogScan: 'Aktuelle Protokolle werden auf bekannte Probleme überprüft',
+    submittingStepSubmit: 'Bericht wird an GitHub gesendet',
     submitSuccess: 'Fehlerbericht erfolgreich gesendet!',
     submitFailed: 'Fehlerbericht konnte nicht gesendet werden',
     diagnosticChecking: 'Druckerverbindungen werden geprüft...',

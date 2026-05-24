@@ -3042,6 +3042,11 @@ export default {
     collectItem10: 'Python 包版本',
     collectItem11: '数据库健康检查',
     collectItem12: 'Docker 环境详情',
+    bundleGenerating: '正在生成包...',
+    bundleStepConnection: '正在执行打印机连接性检查',
+    bundleStepVirtualPrinters: '正在执行虚拟打印机设置检查',
+    bundleStepLogScan: '正在扫描最近的日志以查找已知问题',
+    bundleStepBuild: '正在构建支持包 ZIP 文件',
   },
 
   // File manager
@@ -5668,6 +5673,10 @@ export default {
     maxDuration: '{{minutes}}分钟后自动停止',
     stoppingLogs: '正在收集日志并提交...',
     submitting: '正在提交错误报告...',
+    submittingStepConnection: '正在执行打印机连接性检查',
+    submittingStepVirtualPrinters: '正在执行虚拟打印机设置检查',
+    submittingStepLogScan: '正在扫描最近的日志以查找已知问题',
+    submittingStepSubmit: '正在将报告提交至 GitHub',
     submitSuccess: '错误报告提交成功！',
     submitFailed: '提交错误报告失败',
     diagnosticChecking: '正在检查打印机连接...',

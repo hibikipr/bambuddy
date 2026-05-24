@@ -3043,6 +3043,11 @@ export default {
     collectItem10: 'Versions packages Python',
     collectItem11: 'Santé base de données',
     collectItem12: 'Détails environnement Docker',
+    bundleGenerating: 'Génération du paquet...',
+    bundleStepConnection: 'Vérification de la connectivité des imprimantes',
+    bundleStepVirtualPrinters: 'Vérification de la configuration des imprimantes virtuelles',
+    bundleStepLogScan: 'Analyse des journaux récents pour les problèmes connus',
+    bundleStepBuild: 'Création du ZIP du paquet de support',
   },
 
   // File manager
@@ -5670,6 +5675,10 @@ export default {
     maxDuration: 'Arrêt auto après {{minutes}} min',
     stoppingLogs: 'Collecte des journaux & envoi...',
     submitting: 'Envoi du rapport de bug...',
+    submittingStepConnection: 'Vérification de la connectivité des imprimantes',
+    submittingStepVirtualPrinters: 'Vérification de la configuration des imprimantes virtuelles',
+    submittingStepLogScan: 'Analyse des journaux récents pour les problèmes connus',
+    submittingStepSubmit: 'Envoi du rapport vers GitHub',
     submitSuccess: 'Rapport de bug envoyé avec succès !',
     submitFailed: 'Échec de l\'envoi du rapport de bug',
     diagnosticChecking: 'Vérification des connexions des imprimantes...',

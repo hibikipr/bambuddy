@@ -3057,6 +3057,11 @@ export default {
     collectItem10: 'Versiones de los paquetes de Python',
     collectItem11: 'Comprobaciones de estado de la base de datos',
     collectItem12: 'Detalles del entorno de Docker',
+    bundleGenerating: 'Generando paquete...',
+    bundleStepConnection: 'Ejecutando comprobaciones de conectividad de impresoras',
+    bundleStepVirtualPrinters: 'Ejecutando comprobaciones de configuración de impresoras virtuales',
+    bundleStepLogScan: 'Analizando los registros recientes en busca de problemas conocidos',
+    bundleStepBuild: 'Creando el archivo ZIP del paquete de soporte',
   },
 
   // File manager
@@ -5689,6 +5694,10 @@ export default {
     maxDuration: 'Se detiene automáticamente tras {{minutes}} min',
     stoppingLogs: 'Recopilando registros y enviando...',
     submitting: 'Enviando el informe de error...',
+    submittingStepConnection: 'Ejecutando comprobaciones de conectividad de impresoras',
+    submittingStepVirtualPrinters: 'Ejecutando comprobaciones de configuración de impresoras virtuales',
+    submittingStepLogScan: 'Analizando los registros recientes en busca de problemas conocidos',
+    submittingStepSubmit: 'Enviando el informe a GitHub',
     submitSuccess: '¡Informe de error enviado correctamente!',
     submitFailed: 'Error al enviar el informe de error',
     diagnosticChecking: 'Comprobando las conexiones de las impresoras...',
