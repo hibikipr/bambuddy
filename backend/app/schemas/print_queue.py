@@ -28,6 +28,10 @@ class PrintQueueItemCreate(BaseModel):
     require_previous_success: bool = False
     auto_off_after: bool = False  # Power off printer after print completes
     manual_start: bool = False  # Requires manual trigger to start (staged)
+    # Persistent "Print Anyway" acknowledgement (#1698-followup). When set,
+    # PrintModal already showed the deficit warning and the user confirmed,
+    # so the scheduler does not re-flag this item on the next tick.
+    skip_filament_check: bool = False
     # AMS mapping: list of global tray IDs for each filament slot
     # Format: [5, -1, 2, -1] where position = slot_id-1, value = global tray ID (-1 = unused)
     ams_mapping: list[int] | None = None
@@ -96,6 +100,9 @@ class PrintQueueItemResponse(BaseModel):
     # (#1496). Display-only — the ▶ click recomputes deficit against live
     # spool state.
     filament_short: bool = False
+    # User has acknowledged "Print Anyway" — scheduler skips the deficit check
+    # for this item (#1698-followup).
+    skip_filament_check: bool = False
     ams_mapping: list[int] | None = None
     plate_id: int | None = None  # Plate ID for multi-plate 3MF files
     # Print options

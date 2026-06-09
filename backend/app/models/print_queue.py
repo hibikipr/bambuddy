@@ -85,6 +85,14 @@ class PrintQueueItem(Base):
     # block automatically.
     filament_short: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # User has acknowledged the filament-shortage warning for this item
+    # ("Print Anyway"). Set by the start route when the user passes
+    # skip_filament_check=true, or at queue-creation time if PrintModal's
+    # frontend deficit warning was acknowledged. Survives scheduler ticks so
+    # the dispatch no longer bounces between "user said anyway" and
+    # "scheduler re-flagged" (#1698-followup).
+    skip_filament_check: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # Tracking
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

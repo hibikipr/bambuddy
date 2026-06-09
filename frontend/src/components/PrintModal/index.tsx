@@ -653,6 +653,10 @@ export function PrintModal({
       auto_off_after: scheduleOptions.autoOffAfter,
       gcode_injection: scheduleOptions.gcodeInjection,
       manual_start: scheduleOptions.scheduleType === 'manual',
+      // When the user clicks "Print Anyway" on the frontend deficit warning,
+      // persist that acknowledgement so the scheduler doesn't immediately
+      // re-flag the item on its first dispatch tick (#1698-followup).
+      skip_filament_check: options?.skipFilamentCheck === true ? true : undefined,
       ams_mapping: printerId ? getMappingForPrinter(printerId) : undefined,
       plate_id: plateOverride !== undefined ? plateOverride : selectedPlate,
       scheduled_time: scheduleOptions.scheduleType === 'scheduled' && scheduleOptions.scheduledTime

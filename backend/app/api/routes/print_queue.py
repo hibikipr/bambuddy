@@ -199,6 +199,7 @@ def _enrich_response(item: PrintQueueItem) -> PrintQueueItemResponse:
         "auto_off_after": item.auto_off_after,
         "manual_start": item.manual_start,
         "filament_short": bool(item.filament_short),
+        "skip_filament_check": bool(item.skip_filament_check),
         "ams_mapping": ams_mapping_parsed,
         "plate_id": item.plate_id,
         "bed_levelling": item.bed_levelling,
@@ -539,6 +540,7 @@ async def add_to_queue(
             require_previous_success=data.require_previous_success,
             auto_off_after=data.auto_off_after,
             manual_start=data.manual_start,
+            skip_filament_check=data.skip_filament_check,
             ams_mapping=ams_mapping_json,
             plate_id=data.plate_id,
             bed_levelling=data.bed_levelling,
@@ -1096,6 +1098,12 @@ async def start_queue_item(
     # Print Anyway / no deficit: clear the flags and let the scheduler dispatch.
     item.manual_start = False
     item.filament_short = False
+    # Persist the user's "Print Anyway" decision so the scheduler does not
+    # immediately re-flag this item on the next tick (#1698-followup). The
+    # pre-fix behaviour bounced between "user said anyway" and
+    # "scheduler re-blocked on same deficit" forever.
+    if skip_filament_check:
+        item.skip_filament_check = True
     # Credit the clicker as the item's owner when no prior owner is set —
     # VP-uploaded queue items arrive over FTP unattributed, so without this
     # the print log's User column stays blank even when auth is on

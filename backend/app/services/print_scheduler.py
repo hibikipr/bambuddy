@@ -1846,6 +1846,14 @@ class PrintScheduler:
         since been swapped to one with enough material clears the flag here
         so the next scheduler tick dispatches it.
         """
+        # User has explicitly acknowledged the deficit ("Print Anyway") —
+        # don't re-flag, don't even compute. Without this short-circuit the
+        # scheduler bounces between "user said anyway" (route clears
+        # manual_start) and "scheduler re-blocked" (this method re-flags it
+        # on identical spool state) (#1698-followup).
+        if item.skip_filament_check:
+            return False
+
         try:
             deficit = await compute_deficit_for_queue_item(db, item)
         except Exception as e:
