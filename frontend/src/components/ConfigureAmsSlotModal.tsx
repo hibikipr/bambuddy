@@ -639,10 +639,11 @@ export function ConfigureAmsSlotModal({
       }
     }
 
-    // Sort: orca_cloud first (user-curated), then cloud user presets, then
-    // cloud built-in, then local, then builtin fallback
+    // Sort: local first (user explicitly imported them), then orca_cloud,
+    // then bambu cloud, then builtin fallback. Matches the SliceModal
+    // tier priority.
     return items.sort((a, b) => {
-      const sourceOrder = { orca_cloud: 0, cloud: 1, local: 2, builtin: 3 };
+      const sourceOrder = { local: 0, orca_cloud: 1, cloud: 2, builtin: 3 };
       if (a.source !== b.source) return sourceOrder[a.source] - sourceOrder[b.source];
       if (a.isUser && !b.isUser) return -1;
       if (!a.isUser && b.isUser) return 1;
@@ -1099,14 +1100,19 @@ export function ConfigureAmsSlotModal({
                                 {t('profiles.localProfiles.badge')}
                               </span>
                             )}
+                            {preset.source === 'orca_cloud' && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">
+                                {t('configureAmsSlot.orcaCloud')}
+                              </span>
+                            )}
+                            {preset.source === 'cloud' && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-bambu-blue/20 text-bambu-blue">
+                                {t('configureAmsSlot.bambuCloud')}
+                              </span>
+                            )}
                             {preset.source === 'builtin' && (
                               <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
                                 {t('configureAmsSlot.builtin')}
-                              </span>
-                            )}
-                            {preset.isUser && (
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-bambu-blue/20 text-bambu-blue">
-                                {t('configureAmsSlot.custom')}
                               </span>
                             )}
                           </div>
@@ -1334,14 +1340,19 @@ export function ConfigureAmsSlotModal({
                                   {t('profiles.localProfiles.badge')}
                                 </span>
                               )}
+                              {preset.source === 'orca_cloud' && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-400">
+                                  {t('configureAmsSlot.orcaCloud')}
+                                </span>
+                              )}
+                              {preset.source === 'cloud' && (
+                                <span className="text-xs px-1.5 py-0.5 rounded bg-bambu-blue/20 text-bambu-blue">
+                                  {t('configureAmsSlot.bambuCloud')}
+                                </span>
+                              )}
                               {preset.source === 'builtin' && (
                                 <span className="text-xs px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
                                   {t('configureAmsSlot.builtin')}
-                                </span>
-                              )}
-                              {preset.isUser && (
-                                <span className="text-xs px-1.5 py-0.5 rounded bg-bambu-blue/20 text-bambu-blue">
-                                  {t('configureAmsSlot.custom')}
                                 </span>
                               )}
                             </div>

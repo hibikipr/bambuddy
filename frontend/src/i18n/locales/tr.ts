@@ -5190,6 +5190,8 @@ export default {
     noMatchingPresets: 'Eşleşen ön ayar bulunamadı.',
     custom: 'Özel',
     builtin: 'Yerleşik',
+    orcaCloud: 'Orca Cloud',
+    bambuCloud: 'Bambu Cloud',
     settingsSentToPrinter: 'Ayarlar yazıcıya gönderildi',
     filamentProfile: 'Filament Profili',
     kProfileLabel: 'K Profili (Basınç İlerlemesi)',

@@ -5236,6 +5236,8 @@ export default {
     noMatchingPresets: 'Aucun profil trouvé.',
     custom: 'Perso',
     builtin: 'Inclus',
+    orcaCloud: 'Orca Cloud',
+    bambuCloud: 'Bambu Cloud',
     settingsSentToPrinter: 'Réglages envoyés',
     filamentProfile: 'Profil Filament',
     kProfileLabel: 'Profil K (Pressure Advance)',

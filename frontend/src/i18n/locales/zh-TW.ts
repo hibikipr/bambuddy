@@ -5234,6 +5234,8 @@ export default {
     noMatchingPresets: '未找到匹配的預設。',
     custom: '自訂',
     builtin: '內建',
+    orcaCloud: 'Orca Cloud',
+    bambuCloud: 'Bambu Cloud',
     settingsSentToPrinter: '設定已傳送到印表機',
     filamentProfile: '耗材設定',
     kProfileLabel: 'K 值設定（壓力推進）',

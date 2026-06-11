@@ -5235,6 +5235,8 @@ export default {
     noMatchingPresets: 'Nessun preset corrispondente trovato.',
     custom: 'Personalizzato',
     builtin: 'Integrato',
+    orcaCloud: 'Orca Cloud',
+    bambuCloud: 'Bambu Cloud',
     settingsSentToPrinter: 'Impostazioni inviate alla stampante',
     filamentProfile: 'Profilo filamento',
     kProfileLabel: 'Profilo K (Pressure Advance)',

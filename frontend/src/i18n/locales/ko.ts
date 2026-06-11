@@ -4939,6 +4939,8 @@ export default {
     noMatchingPresets: '일치하는 프리셋을 찾을 수 없습니다.',
     custom: '사용자 지정',
     builtin: '기본 제공',
+    orcaCloud: 'Orca Cloud',
+    bambuCloud: 'Bambu Cloud',
     settingsSentToPrinter: '설정이 프린터로 전송됨',
     filamentProfile: '필라멘트 프로필',
     kProfileLabel: 'K 프로필 (압력 전진)',
