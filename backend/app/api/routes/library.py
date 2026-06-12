@@ -3576,11 +3576,13 @@ async def slice_and_persist(
         folder_id=folder_id,
         filename=out_filename,
         file_path=to_relative_path(out_path),
-        # Sliced output is a `.gcode.3mf` zip with embedded G-code, but the
-        # user-facing meaning is "ready-to-print G-code" — using "gcode"
-        # gives it the same badge as plain .gcode files and distinguishes
-        # it from un-sliced `.3mf` source models.
-        file_type="gcode",
+        # The on-disk payload is a ZIP container — the file_type must
+        # record that so the preview endpoint opens it as a 3MF instead
+        # of returning the ZIP bytes as text/plain (#1709 / yanglei1980).
+        # Earlier code mis-typed sliced rows as "gcode" to share the
+        # plain-G-code badge; that broke the embedded viewer. UI badges
+        # and gates for "gcode.3mf" are explicit at the call sites.
+        file_type="gcode.3mf",
         file_size=len(result.content),
         file_hash=hashlib.sha256(result.content).hexdigest(),
         thumbnail_path=thumbnail_relative,
@@ -4332,15 +4334,14 @@ async def get_gcode(
     if not abs_path or not abs_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
 
-    if file.file_type == "gcode":
-        return FastAPIFileResponse(str(abs_path), media_type="text/plain")
-    elif file.file_type in ("3mf", "gcode.3mf"):
-        # Extract gcode from 3mf zip container. `.gcode.3mf` sliced outputs
-        # carry the same `Metadata/plate_*.gcode` entries as a `.3mf`, so
-        # the unzip path is identical — just had to expand the gate.
+    # Legacy sliced rows from before #1709 stored a `.gcode.3mf` ZIP body
+    # under file_type="gcode" — the on-disk filename is the truth in that
+    # case, so detect by suffix before checking the type column.
+    is_gcode_3mf = file.file_type in ("3mf", "gcode.3mf") or file.filename.lower().endswith(".gcode.3mf")
+
+    if is_gcode_3mf:
         try:
             with zipfile.ZipFile(str(abs_path), "r") as zf:
-                # Find gcode file
                 gcode_files = [n for n in zf.namelist() if n.endswith(".gcode")]
                 if not gcode_files:
                     raise HTTPException(status_code=404, detail="No gcode found in 3MF file")
@@ -4350,6 +4351,8 @@ async def get_gcode(
                 return Response(content=gcode_content, media_type="text/plain")
         except zipfile.BadZipFile:
             raise HTTPException(status_code=400, detail="Invalid 3MF file")
+    elif file.file_type == "gcode":
+        return FastAPIFileResponse(str(abs_path), media_type="text/plain")
     else:
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
