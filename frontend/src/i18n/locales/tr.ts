@@ -4974,6 +4974,8 @@ export default {
     progressMilestonesDescription: '%25, %50, %75\'te bildir',
     printerOffline: 'Yazıcı Çevrimdışı',
     printerError: 'Yazıcı Hatası',
+    aiFailureDetection: 'AI Hata Tespiti',
+    aiFailureDetectionDescription: 'Obico AI olası bir baskı hatası tespit ettiğinde bildir',
     lowFilamentLabel: 'Az Filament',
     maintenanceDue: 'Bakım Zamanı',
     maintenanceDueDescription: 'Bakım gerektiğinde bildir',

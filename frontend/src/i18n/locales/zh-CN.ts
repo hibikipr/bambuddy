@@ -5007,6 +5007,8 @@ export default {
     progressMilestonesDescription: '在 25%、50%、75% 时通知',
     printerOffline: '打印机离线',
     printerError: '打印机错误',
+    aiFailureDetection: 'AI 失败检测',
+    aiFailureDetectionDescription: '当 Obico AI 检测到可能的打印失败时通知',
     lowFilamentLabel: '耗材不足',
     maintenanceDue: '需要维护',
     maintenanceDueDescription: '需要维护时通知',

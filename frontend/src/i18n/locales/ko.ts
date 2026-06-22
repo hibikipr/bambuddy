@@ -4740,6 +4740,8 @@ export default {
     progressMilestonesDescription: '25%, 50%, 75%에서 알림',
     printerOffline: '프린터 오프라인',
     printerError: '프린터 오류',
+    aiFailureDetection: 'AI 실패 감지',
+    aiFailureDetectionDescription: 'Obico AI가 인쇄 실패 가능성을 감지하면 알림',
     lowFilamentLabel: '필라멘트 부족',
     maintenanceDue: '유지 관리 필요',
     maintenanceDueDescription: '유지 관리가 필요할 때 알림',

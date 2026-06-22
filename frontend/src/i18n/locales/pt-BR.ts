@@ -5007,6 +5007,8 @@ export default {
     progressMilestonesDescription: 'Notificar em 25%, 50%, 75%',
     printerOffline: 'Impressora Offline',
     printerError: 'Erro da Impressora',
+    aiFailureDetection: 'Detecção de Falhas por IA',
+    aiFailureDetectionDescription: 'Notificar quando a IA do Obico detectar uma possível falha de impressão',
     lowFilamentLabel: 'Filamento Baixo',
     maintenanceDue: 'Manutenção Necessária',
     maintenanceDueDescription: 'Notificar quando manutenção for necessária',

@@ -5018,6 +5018,8 @@ export default {
     progressMilestonesDescription: 'Benachrichtigung bei 25%, 50%, 75%',
     printerOffline: 'Drucker offline',
     printerError: 'Druckerfehler',
+    aiFailureDetection: 'KI-Fehlererkennung',
+    aiFailureDetectionDescription: 'Benachrichtigen, wenn die Obico-KI einen möglichen Druckfehler erkennt',
     lowFilamentLabel: 'Filament niedrig',
     maintenanceDue: 'Wartung fällig',
     maintenanceDueDescription: 'Benachrichtigen, wenn Wartung erforderlich ist',

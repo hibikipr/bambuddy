@@ -5019,6 +5019,8 @@ export default {
     progressMilestonesDescription: '25%、50%、75%で通知',
     printerOffline: 'プリンターオフライン',
     printerError: 'プリンターエラー',
+    aiFailureDetection: 'AI 故障検出',
+    aiFailureDetectionDescription: 'Obico AI が印刷の不具合の可能性を検出したときに通知',
     lowFilamentLabel: 'フィラメント残量低下',
     maintenanceDue: 'メンテナンス期限',
     maintenanceDueDescription: 'メンテナンスが必要な場合に通知',
