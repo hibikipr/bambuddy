@@ -1762,6 +1762,8 @@ export default {
     // Filament Tracking Mode
     filamentTracking: '耗材追蹤',
     filamentTrackingDesc: '選擇如何追蹤您的耗材。您可以使用內建庫存或連線外部 Spoolman 伺服器。',
+    autoAddUnknownRfid: '自動新增未知 RFID 料盤',
+    autoAddUnknownRfidDesc: '偵測到具有未知 RFID 標籤的料盤時，自動建立庫存項目。如果您手動預先註冊新料盤以避免重複，請關閉此項。',
     filamentChecks: '耗材檢查',
     disableFilamentWarnings: '停用耗材警告',
     disableFilamentWarningsDesc: '在列印或加入佇列時不顯示耗材不足警告',
@@ -3829,6 +3831,13 @@ export default {
   inventory: {
     title: '耗材庫存',
     subtitle: '管理您的料盤',
+    addToInventory: '新增至庫存',
+    addToInventoryPending: '正在新增...',
+    addToInventorySuccess: '料盤已新增至庫存',
+    addToInventoryFailed: '新增料盤至庫存失敗',
+    unknownSpoolTitle: '偵測到新耗材',
+    unknownSpoolMessage: '在 {{location}} 偵測到具有未知 RFID 標籤的料盤。是否立即新增至庫存？',
+    unknownSpoolSlot: '插槽',
     spoolmanMixedContentTitle: 'Spoolman 無法透過 HTTPS 載入 — 瀏覽器已封鎖混合內容',
     spoolmanMixedContentBody: 'Bambuddy 透過您的反向代理以 HTTPS 提供服務，但您的 Spoolman 位址仍為 HTTP。基於安全考量，瀏覽器會封鎖混合內容，因此內嵌的 Spoolman 介面無法載入。Spoolman 也必須可透過 HTTPS 存取。',
     spoolmanMixedContentFixReverseProxy: '請將 Spoolman 置於與 Bambuddy 相同的反向代理（Traefik / Nginx / Caddy）之後並啟用 HTTPS，然後在設定中將 Spoolman URL 更新為新的 HTTPS 位址。',

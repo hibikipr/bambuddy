@@ -1775,6 +1775,8 @@ export default {
     // Filament Tracking Mode
     filamentTracking: 'Filament Tracking',
     filamentTrackingDesc: 'Choose how to track your filament spools. You can use the built-in inventory or connect an external Spoolman server.',
+    autoAddUnknownRfid: 'Auto-add unknown RFID spools',
+    autoAddUnknownRfidDesc: 'Automatically create an inventory entry when a spool with an unknown RFID tag is detected. Turn off if you pre-register new spools manually to avoid duplicates.',
     filamentChecks: 'Filament checks',
     disableFilamentWarnings: 'Disable filament warnings',
     disableFilamentWarningsDesc: 'Don\'t show warnings about insufficient filament when printing or queueing',
@@ -3856,6 +3858,13 @@ export default {
   inventory: {
     title: 'Spool Inventory',
     subtitle: 'Manage your spools',
+    addToInventory: 'Add to Inventory',
+    addToInventoryPending: 'Adding...',
+    addToInventorySuccess: 'Spool added to inventory',
+    addToInventoryFailed: 'Failed to add spool to inventory',
+    unknownSpoolTitle: 'New filament detected',
+    unknownSpoolMessage: 'A spool with an unknown RFID tag was detected at {{location}}. Add it to your inventory now?',
+    unknownSpoolSlot: 'Slot',
     spoolmanMixedContentTitle: 'Spoolman can\'t load over HTTPS — mixed-content blocked by your browser',
     spoolmanMixedContentBody: 'Bambuddy is served over HTTPS (via your reverse proxy), but your Spoolman URL is still plain HTTP. Browsers block mixed content for security, so the embedded Spoolman UI can\'t render. Spoolman needs to be reachable over HTTPS for this to work.',
     spoolmanMixedContentFixReverseProxy: 'Put Spoolman behind the same reverse proxy as Bambuddy (Traefik / Nginx / Caddy) with HTTPS, then update the Spoolman URL in Settings to the new HTTPS address.',

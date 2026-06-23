@@ -111,6 +111,7 @@ async def _build_settings_response(db: AsyncSession, is_api_key: bool = False) -
             "spoolman_enabled",
             "spoolman_disable_weight_sync",
             "spoolman_report_partial_usage",
+            "auto_add_unknown_rfid",
             "disable_filament_warnings",
             "prefer_lowest_filament",
             "check_updates",
@@ -407,6 +408,7 @@ async def get_spoolman_settings(
     spoolman_sync_mode = await get_setting(db, "spoolman_sync_mode") or "auto"
     spoolman_disable_weight_sync = await get_setting(db, "spoolman_disable_weight_sync") or "false"
     spoolman_report_partial_usage = await get_setting(db, "spoolman_report_partial_usage") or "true"
+    auto_add_unknown_rfid = await get_setting(db, "auto_add_unknown_rfid") or "true"
 
     return {
         "spoolman_enabled": spoolman_enabled,
@@ -414,6 +416,7 @@ async def get_spoolman_settings(
         "spoolman_sync_mode": spoolman_sync_mode,
         "spoolman_disable_weight_sync": spoolman_disable_weight_sync,
         "spoolman_report_partial_usage": spoolman_report_partial_usage,
+        "auto_add_unknown_rfid": auto_add_unknown_rfid,
     }
 
 
@@ -453,6 +456,8 @@ async def update_spoolman_settings(
         await set_setting(db, "spoolman_disable_weight_sync", settings["spoolman_disable_weight_sync"])
     if "spoolman_report_partial_usage" in settings:
         await set_setting(db, "spoolman_report_partial_usage", settings["spoolman_report_partial_usage"])
+    if "auto_add_unknown_rfid" in settings:
+        await set_setting(db, "auto_add_unknown_rfid", settings["auto_add_unknown_rfid"])
 
     spoolman_changed = "spoolman_enabled" in settings or "spoolman_url" in settings
 

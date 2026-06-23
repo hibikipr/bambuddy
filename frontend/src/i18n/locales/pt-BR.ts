@@ -1717,6 +1717,8 @@ export default {
     // Filament Tracking Mode
     filamentTracking: 'Rastreamento de Filamento',
     filamentTrackingDesc: 'Escolha como rastrear seus rolos de filamento. Você pode usar o inventário interno ou conectar a um servidor Spoolman externo.',
+    autoAddUnknownRfid: 'Adicionar automaticamente carretéis RFID desconhecidos',
+    autoAddUnknownRfidDesc: 'Cria automaticamente uma entrada de inventário quando um carretel com tag RFID desconhecido é detectado. Desligue se você pré-registra novos carretéis manualmente para evitar duplicatas.',
     filamentChecks: 'Verificações de filamento',
     disableFilamentWarnings: 'Desativar avisos de filamento',
     disableFilamentWarningsDesc: 'Não mostrar avisos sobre filamento insuficiente ao imprimir ou adicionar à fila',
@@ -3829,6 +3831,13 @@ export default {
   inventory: {
     title: 'Inventário de Carretéis',
     subtitle: 'Gerencie seus carretéis',
+    addToInventory: 'Adicionar ao Inventário',
+    addToInventoryPending: 'Adicionando...',
+    addToInventorySuccess: 'Carretel adicionado ao inventário',
+    addToInventoryFailed: 'Falha ao adicionar carretel ao inventário',
+    unknownSpoolTitle: 'Novo filamento detectado',
+    unknownSpoolMessage: 'Um carretel com tag RFID desconhecido foi detectado em {{location}}. Adicioná-lo ao seu inventário agora?',
+    unknownSpoolSlot: 'Slot',
     spoolmanMixedContentTitle: 'Spoolman não pode carregar em HTTPS — conteúdo misto bloqueado pelo navegador',
     spoolmanMixedContentBody: 'O Bambuddy é servido via HTTPS (pelo seu reverse proxy), mas a URL do Spoolman ainda é HTTP. Os navegadores bloqueiam conteúdo misto por segurança, então a interface embutida do Spoolman não consegue carregar. O Spoolman também precisa estar acessível via HTTPS.',
     spoolmanMixedContentFixReverseProxy: 'Coloque o Spoolman atrás do mesmo reverse proxy do Bambuddy (Traefik / Nginx / Caddy) com HTTPS e atualize a URL do Spoolman em Configurações com o novo endereço HTTPS.',

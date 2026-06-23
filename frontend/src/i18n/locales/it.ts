@@ -1717,6 +1717,8 @@ export default {
     // Filament Tracking Mode
     filamentTracking: 'Tracciamento filamento',
     filamentTrackingDesc: 'Scegli come tracciare le bobine di filamento. Puoi usare l\'inventario integrato o collegare un server Spoolman esterno.',
+    autoAddUnknownRfid: 'Aggiungi automaticamente bobine RFID sconosciute',
+    autoAddUnknownRfidDesc: 'Crea automaticamente una voce di inventario quando viene rilevata una bobina con tag RFID sconosciuto. Disabilita se registri manualmente le nuove bobine in anticipo per evitare duplicati.',
     filamentChecks: 'Controlli filamento',
     disableFilamentWarnings: 'Disabilita avvisi filamento',
     disableFilamentWarningsDesc: 'Non mostrare avvisi per filamento insufficiente durante la stampa o l\'accodamento',
@@ -3829,6 +3831,13 @@ export default {
   inventory: {
     title: 'Inventario Bobine',
     subtitle: 'Gestisci le tue bobine',
+    addToInventory: 'Aggiungi all\'inventario',
+    addToInventoryPending: 'Aggiunta in corso...',
+    addToInventorySuccess: 'Bobina aggiunta all\'inventario',
+    addToInventoryFailed: 'Aggiunta della bobina all\'inventario non riuscita',
+    unknownSpoolTitle: 'Nuovo filamento rilevato',
+    unknownSpoolMessage: 'È stata rilevata una bobina con tag RFID sconosciuto in {{location}}. Aggiungerla all\'inventario ora?',
+    unknownSpoolSlot: 'Slot',
     spoolmanMixedContentTitle: 'Spoolman non può essere caricato tramite HTTPS — contenuto misto bloccato dal browser',
     spoolmanMixedContentBody: 'Bambuddy viene servito tramite HTTPS (dietro il tuo reverse proxy), ma l\'URL di Spoolman è ancora HTTP. I browser bloccano il contenuto misto per motivi di sicurezza, quindi l\'interfaccia Spoolman incorporata non può essere visualizzata. Anche Spoolman deve essere raggiungibile via HTTPS.',
     spoolmanMixedContentFixReverseProxy: 'Metti Spoolman dietro lo stesso reverse proxy di Bambuddy (Traefik / Nginx / Caddy) in HTTPS, poi aggiorna l\'URL di Spoolman nelle Impostazioni con il nuovo indirizzo HTTPS.',

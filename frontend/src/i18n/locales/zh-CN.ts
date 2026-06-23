@@ -1762,6 +1762,8 @@ export default {
     // Filament Tracking Mode
     filamentTracking: '耗材追踪',
     filamentTrackingDesc: '选择如何追踪您的耗材。您可以使用内置库存或连接外部 Spoolman 服务器。',
+    autoAddUnknownRfid: '自动添加未知 RFID 料盘',
+    autoAddUnknownRfidDesc: '检测到带有未知 RFID 标签的料盘时，自动创建库存条目。如果您手动预先注册新料盘以避免重复，请关闭此项。',
     filamentChecks: '耗材检查',
     disableFilamentWarnings: '禁用耗材警告',
     disableFilamentWarningsDesc: '在打印或加入队列时不显示耗材不足警告',
@@ -3829,6 +3831,13 @@ export default {
   inventory: {
     title: '耗材库存',
     subtitle: '管理您的料盘',
+    addToInventory: '添加到库存',
+    addToInventoryPending: '正在添加...',
+    addToInventorySuccess: '料盘已添加到库存',
+    addToInventoryFailed: '添加料盘到库存失败',
+    unknownSpoolTitle: '检测到新耗材',
+    unknownSpoolMessage: '在 {{location}} 检测到带有未知 RFID 标签的料盘。是否立即添加到库存？',
+    unknownSpoolSlot: '槽位',
     spoolmanMixedContentTitle: 'Spoolman 无法通过 HTTPS 加载 — 浏览器已阻止混合内容',
     spoolmanMixedContentBody: 'Bambuddy 通过您的反向代理以 HTTPS 提供服务，但您的 Spoolman 地址仍为 HTTP。出于安全考虑，浏览器会阻止混合内容，因此嵌入式 Spoolman 界面无法加载。Spoolman 也必须通过 HTTPS 访问。',
     spoolmanMixedContentFixReverseProxy: '请将 Spoolman 置于与 Bambuddy 相同的反向代理（Traefik / Nginx / Caddy）之后并启用 HTTPS，然后在设置中将 Spoolman URL 更新为新的 HTTPS 地址。',

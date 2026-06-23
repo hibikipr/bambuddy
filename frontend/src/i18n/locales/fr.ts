@@ -1717,6 +1717,8 @@ export default {
     // Filament Tracking Mode
     filamentTracking: 'Suivi de Filament',
     filamentTrackingDesc: 'Choisissez comment suivre vos bobines. Utilisez l\'inventaire intégré ou connectez un serveur Spoolman.',
+    autoAddUnknownRfid: 'Ajouter automatiquement les bobines RFID inconnues',
+    autoAddUnknownRfidDesc: 'Crée automatiquement une entrée d\'inventaire lorsqu\'une bobine avec un tag RFID inconnu est détectée. Désactivez si vous enregistrez manuellement les nouvelles bobines à l\'avance pour éviter les doublons.',
     filamentChecks: 'Vérifications du filament',
     disableFilamentWarnings: 'Désactiver les avertissements de filament',
     disableFilamentWarningsDesc: 'Ne pas afficher les avertissements de filament insuffisant lors de l\'impression ou de la mise en file d\'attente',
@@ -3830,6 +3832,13 @@ export default {
   inventory: {
     title: 'Inventaire de Bobines',
     subtitle: 'Gérez vos bobines',
+    addToInventory: 'Ajouter à l\'inventaire',
+    addToInventoryPending: 'Ajout...',
+    addToInventorySuccess: 'Bobine ajoutée à l\'inventaire',
+    addToInventoryFailed: 'Échec de l\'ajout de la bobine à l\'inventaire',
+    unknownSpoolTitle: 'Nouveau filament détecté',
+    unknownSpoolMessage: 'Une bobine avec un tag RFID inconnu a été détectée à {{location}}. L\'ajouter à votre inventaire maintenant ?',
+    unknownSpoolSlot: 'Emplacement',
     spoolmanMixedContentTitle: 'Spoolman ne peut pas se charger en HTTPS — contenu mixte bloqué par votre navigateur',
     spoolmanMixedContentBody: 'Bambuddy est servi en HTTPS (via votre reverse proxy), mais votre URL Spoolman est encore en HTTP. Les navigateurs bloquent le contenu mixte pour des raisons de sécurité, donc l\'interface Spoolman intégrée ne peut pas s\'afficher. Spoolman doit être accessible en HTTPS.',
     spoolmanMixedContentFixReverseProxy: 'Placez Spoolman derrière le même reverse proxy que Bambuddy (Traefik / Nginx / Caddy) en HTTPS, puis mettez à jour l\'URL Spoolman dans les Paramètres avec la nouvelle adresse HTTPS.',

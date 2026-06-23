@@ -1114,6 +1114,9 @@ export interface AppSettings {
   // Filament tracking
   disable_filament_warnings: boolean;  // Disable filament warnings (print insufficiency and assignment mismatch)
   prefer_lowest_filament: boolean;  // When multiple spools match, prefer lowest remaining filament
+  spoolman_enabled: boolean;  // True when the user has switched filament tracking to Spoolman; backend includes this in the /settings/ response even though earlier consumers read it from the dedicated /settings/spoolman endpoint as a string
+  auto_add_unknown_rfid: boolean;  // When false, the backend skips auto-creating inventory spools for unknown RFID tags and instead broadcasts an unknown_tag event for the confirmation modal
+  spoolman_url: string;
   // Default printer
   default_printer_id: number | null;
   // Dark mode theme settings
@@ -5051,10 +5054,20 @@ export const api = {
     request<{ success: boolean; message: string }>(`/spoolman/spools/${spoolId}/unlink`, {
       method: 'POST',
     }),
+  createSpoolmanSpoolFromSlot: (data: { printer_id: number; ams_id: number; tray_id: number }) =>
+    request<{ success: boolean; spool_id: number | null }>(`/spoolman/spools/from-slot`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  createSpoolFromSlot: (data: { printer_id: number; ams_id: number; tray_id: number }) =>
+    request<InventorySpool>(`/inventory/spools/from-slot`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   getSpoolmanSettings: () =>
-    request<{ spoolman_enabled: string; spoolman_url: string; spoolman_sync_mode: string; spoolman_disable_weight_sync: string; spoolman_report_partial_usage: string; }>('/settings/spoolman'),
-  updateSpoolmanSettings: (data: { spoolman_enabled?: string; spoolman_url?: string; spoolman_sync_mode?: string; spoolman_disable_weight_sync?: string; spoolman_report_partial_usage?: string; }) =>
-    request<{ spoolman_enabled: string; spoolman_url: string; spoolman_sync_mode: string; spoolman_disable_weight_sync: string; spoolman_report_partial_usage: string; }>('/settings/spoolman', {
+    request<{ spoolman_enabled: string; spoolman_url: string; spoolman_sync_mode: string; spoolman_disable_weight_sync: string; spoolman_report_partial_usage: string; auto_add_unknown_rfid: string; }>('/settings/spoolman'),
+  updateSpoolmanSettings: (data: { spoolman_enabled?: string; spoolman_url?: string; spoolman_sync_mode?: string; spoolman_disable_weight_sync?: string; spoolman_report_partial_usage?: string; auto_add_unknown_rfid?: string; }) =>
+    request<{ spoolman_enabled: string; spoolman_url: string; spoolman_sync_mode: string; spoolman_disable_weight_sync: string; spoolman_report_partial_usage: string; auto_add_unknown_rfid: string; }>('/settings/spoolman', {
       method: 'PUT',
       body: JSON.stringify(data),
     }),

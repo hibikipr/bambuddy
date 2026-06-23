@@ -112,7 +112,7 @@ import { SkipObjectsModal, SkipObjectsIcon } from '../components/SkipObjectsModa
 import { FileUploadModal } from '../components/FileUploadModal';
 import { PrintModal } from '../components/PrintModal';
 import { PrinterInfoModal } from '../components/PrinterInfoModal';
-import { getGlobalTrayId, getFillBarColor, getSpoolmanFillLevel, getFallbackSpoolTag, isBambuLabSpool } from '../utils/amsHelpers';
+import { getAmsLabel, getGlobalTrayId, getFillBarColor, getSpoolmanFillLevel, getFallbackSpoolTag, isBambuLabSpool } from '../utils/amsHelpers';
 import { getPrinterImage, getWifiStrength, filterCompatibleQueueItems } from '../utils/printer';
 import { FilamentSlotCircle } from '../components/FilamentSlotCircle';
 import { Collapsible } from '../components/Collapsible';
@@ -845,16 +845,6 @@ function TemperatureIndicator({ temp, goodThreshold = 28, fairThreshold = 35, on
 }
 
 
-function getAmsLabel(amsId: number | string, trayCount: number): string {
-  // Ensure amsId is a number (backend might send string)
-  const id = typeof amsId === 'string' ? parseInt(amsId, 10) : amsId;
-  const safeId = isNaN(id) ? 0 : id;
-  const isHt = trayCount === 1;
-  // AMS-HT uses IDs starting at 128, regular AMS uses 0-3
-  const normalizedId = safeId >= 128 ? safeId - 128 : safeId;
-  const letter = String.fromCharCode(65 + normalizedId); // 0=A, 1=B, 2=C, 3=D
-  return isHt ? `HT-${letter}` : `AMS-${letter}`;
-}
 
 /** Classify an empty AMS slot for UI rendering (#1322 follow-up).
  *

@@ -1764,6 +1764,8 @@ export default {
     // Filament Takip Modu
     filamentTracking: 'Filament Takibi',
     filamentTrackingDesc: 'Filament makaralarınızı nasıl takip edeceğinizi seçin. Yerleşik envanteri kullanabilir veya harici bir Spoolman sunucusuna bağlanabilirsiniz.',
+    autoAddUnknownRfid: 'Bilinmeyen RFID makaralarını otomatik ekle',
+    autoAddUnknownRfidDesc: 'Bilinmeyen RFID etiketli bir makara algılandığında otomatik olarak envantere bir kayıt oluşturur. Çoğaltmaları önlemek için yeni makaraları manuel olarak önceden kaydediyorsanız kapatın.',
     filamentChecks: 'Filament kontrolleri',
     disableFilamentWarnings: 'Filament uyarılarını devre dışı bırak',
     disableFilamentWarningsDesc: 'Yazdırırken veya kuyruğa eklerken yetersiz filamentle ilgili uyarıları gösterme',
@@ -3830,6 +3832,13 @@ export default {
   inventory: {
     title: 'Makara Envanteri',
     subtitle: 'Makaralarınızı yönetin',
+    addToInventory: 'Envantere Ekle',
+    addToInventoryPending: 'Ekleniyor...',
+    addToInventorySuccess: 'Makara envantere eklendi',
+    addToInventoryFailed: 'Makara envantere eklenemedi',
+    unknownSpoolTitle: 'Yeni filament algılandı',
+    unknownSpoolMessage: '{{location}} konumunda bilinmeyen RFID etiketli bir makara algılandı. Şimdi envantere eklensin mi?',
+    unknownSpoolSlot: 'Yuva',
     spoolmanMixedContentTitle: 'Spoolman HTTPS üzerinden yüklenemiyor — tarayıcınız tarafından karışık içerik engellendi',
     spoolmanMixedContentBody: 'Bambuddy HTTPS üzerinden sunuluyor (ters proxy\'niz aracılığıyla), ancak Spoolman URL\'niz hâlâ düz HTTP. Tarayıcılar güvenlik için karışık içeriği engeller, bu nedenle gömülü Spoolman arayüzü oluşturulamaz. Bunun çalışması için Spoolman\'in HTTPS üzerinden erişilebilir olması gerekiyor.',
     spoolmanMixedContentFixReverseProxy: "Spoolman'i Bambuddy ile aynı ters proxy'nin (Traefik / Nginx / Caddy) arkasına HTTPS ile koyun, ardından Ayarlardaki Spoolman URL'sini yeni HTTPS adresine güncelleyin.",

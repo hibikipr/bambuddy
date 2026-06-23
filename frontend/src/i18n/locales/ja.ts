@@ -1760,6 +1760,8 @@ export default {
     // Filament Tracking Mode
     filamentTracking: 'フィラメント追跡',
     filamentTrackingDesc: 'フィラメントスプールの追跡方法を選択してください。内蔵インベントリまたは外部Spoolmanサーバーを使用できます。',
+    autoAddUnknownRfid: '不明なRFIDスプールを自動追加',
+    autoAddUnknownRfidDesc: '不明なRFIDタグのスプールが検出されたとき、自動的に在庫エントリを作成します。新しいスプールを事前に手動で登録している場合は、重複を避けるためにオフにしてください。',
     filamentChecks: 'フィラメントチェック',
     disableFilamentWarnings: 'フィラメント警告を無効化',
     disableFilamentWarningsDesc: '印刷またはキュー追加時にフィラメント不足の警告を表示しない',
@@ -3841,6 +3843,13 @@ export default {
   inventory: {
     title: 'スプール在庫管理',
     subtitle: 'スプールを管理',
+    addToInventory: '在庫に追加',
+    addToInventoryPending: '追加中...',
+    addToInventorySuccess: 'スプールを在庫に追加しました',
+    addToInventoryFailed: 'スプールの在庫追加に失敗しました',
+    unknownSpoolTitle: '新しいフィラメントを検出',
+    unknownSpoolMessage: '{{location}} で不明なRFIDタグのスプールが検出されました。今すぐ在庫に追加しますか？',
+    unknownSpoolSlot: 'スロット',
     spoolmanMixedContentTitle: 'Spoolman を HTTPS で読み込めません — ブラウザが混在コンテンツをブロックしています',
     spoolmanMixedContentBody: 'Bambuddy はリバースプロキシ経由で HTTPS 配信されていますが、Spoolman の URL は HTTP のままです。ブラウザはセキュリティ上の理由で混在コンテンツをブロックするため、埋め込みの Spoolman UI を表示できません。Spoolman も HTTPS でアクセスできる必要があります。',
     spoolmanMixedContentFixReverseProxy: 'Spoolman を Bambuddy と同じリバースプロキシ（Traefik / Nginx / Caddy）の後ろに HTTPS で配置し、設定で Spoolman URL を新しい HTTPS アドレスに更新してください。',

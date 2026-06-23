@@ -1668,6 +1668,8 @@ export default {
     },
     filamentTracking: '필라멘트 추적',
     filamentTrackingDesc: '필라멘트 스풀을 추적하는 방법을 선택하세요. 내장 인벤토리를 사용하거나 외부 Spoolman 서버에 연결할 수 있습니다.',
+    autoAddUnknownRfid: '알 수 없는 RFID 스풀 자동 추가',
+    autoAddUnknownRfidDesc: '알 수 없는 RFID 태그가 있는 스풀이 감지되면 자동으로 인벤토리 항목을 생성합니다. 새 스풀을 미리 수동으로 등록한다면 중복을 피하기 위해 끄세요.',
     filamentChecks: '필라멘트 확인',
     disableFilamentWarnings: '필라멘트 경고 비활성화',
     disableFilamentWarningsDesc: '인쇄 또는 대기열 추가 시 필라멘트 부족 경고 표시 안 함',
@@ -3631,6 +3633,13 @@ export default {
 
   inventory: {
     title: '스풀 재고',
+    addToInventory: '인벤토리에 추가',
+    addToInventoryPending: '추가 중...',
+    addToInventorySuccess: '스풀이 인벤토리에 추가됨',
+    addToInventoryFailed: '스풀을 인벤토리에 추가하지 못함',
+    unknownSpoolTitle: '새 필라멘트 감지됨',
+    unknownSpoolMessage: '{{location}}에서 알 수 없는 RFID 태그가 있는 스풀이 감지되었습니다. 지금 인벤토리에 추가하시겠습니까?',
+    unknownSpoolSlot: '슬롯',
     spoolmanMixedContentTitle: 'HTTPS에서 Spoolman을 불러올 수 없음 — 브라우저가 혼합 콘텐츠를 차단함',
     spoolmanMixedContentBody: 'Bambuddy가 HTTPS로 서비스되고 있지만 Spoolman URL은 여전히 HTTP입니다. 브라우저는 보안상 혼합 콘텐츠를 차단하므로 내장된 Spoolman UI가 렌더링되지 않습니다. 이 기능이 작동하려면 Spoolman이 HTTPS로 접근 가능해야 합니다.',
     spoolmanMixedContentFixReverseProxy: 'Spoolman을 Bambuddy와 같은 리버스 프록시(Traefik / Nginx / Caddy) 뒤에 HTTPS로 배치한 다음 설정에서 Spoolman URL을 새 HTTPS 주소로 업데이트하세요.',

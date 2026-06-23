@@ -1761,6 +1761,8 @@ export default {
     // Filament Tracking Mode
     filamentTracking: 'Filament-Verfolgung',
     filamentTrackingDesc: 'Wählen Sie, wie Sie Ihre Filamentspulen verfolgen möchten. Sie können das integrierte Inventar oder einen externen Spoolman-Server verwenden.',
+    autoAddUnknownRfid: 'Unbekannte RFID-Spulen automatisch hinzufügen',
+    autoAddUnknownRfidDesc: 'Erstellt automatisch einen Inventareintrag, wenn eine Spule mit unbekanntem RFID-Tag erkannt wird. Deaktivieren, wenn Sie neue Spulen vorab manuell anlegen, um Duplikate zu vermeiden.',
     filamentChecks: 'Filament-Prüfungen',
     disableFilamentWarnings: 'Filament-Warnungen deaktivieren',
     disableFilamentWarningsDesc: 'Keine Warnungen über unzureichendes Filament beim Drucken oder Einreihen anzeigen',
@@ -3841,6 +3843,13 @@ export default {
   inventory: {
     title: 'Spulen-Inventar',
     subtitle: 'Verwalten Sie Ihre Spulen',
+    addToInventory: 'Zum Inventar hinzufügen',
+    addToInventoryPending: 'Wird hinzugefügt...',
+    addToInventorySuccess: 'Spule zum Inventar hinzugefügt',
+    addToInventoryFailed: 'Spule konnte nicht zum Inventar hinzugefügt werden',
+    unknownSpoolTitle: 'Neues Filament erkannt',
+    unknownSpoolMessage: 'An {{location}} wurde eine Spule mit unbekanntem RFID-Tag erkannt. Jetzt zum Inventar hinzufügen?',
+    unknownSpoolSlot: 'Slot',
     spoolmanMixedContentTitle: 'Spoolman lässt sich nicht über HTTPS laden — Browser blockiert gemischte Inhalte',
     spoolmanMixedContentBody: 'Bambuddy wird über HTTPS ausgeliefert (über deinen Reverse-Proxy), aber deine Spoolman-URL ist nach wie vor HTTP. Browser blockieren gemischte Inhalte aus Sicherheitsgründen, daher kann die eingebettete Spoolman-Oberfläche nicht geladen werden. Spoolman muss ebenfalls über HTTPS erreichbar sein.',
     spoolmanMixedContentFixReverseProxy: 'Stelle Spoolman hinter denselben Reverse-Proxy wie Bambuddy (Traefik / Nginx / Caddy) mit HTTPS und aktualisiere die Spoolman-URL in den Einstellungen auf die neue HTTPS-Adresse.',
