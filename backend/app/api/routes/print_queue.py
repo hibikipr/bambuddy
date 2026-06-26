@@ -541,6 +541,30 @@ async def add_to_queue(
             PrintQueueItem.status == "pending",
         )
 
+    # Serialize concurrent queue inserts to the same scope (#1625-followup).
+    # The race: two concurrent ASAP inserts both compute MAX(position) before
+    # either commits; in an empty scope, both INSERT at position 1 (duplicate).
+    # In a non-empty scope, Postgres's row-level locks on the UPDATE shift
+    # serialize naturally, but the empty-scope path has no rows to lock.
+    # A transaction-scoped advisory lock keyed on the printer_id closes that
+    # window; the lock is released automatically at commit/rollback. Different
+    # printers don't contend. SQLite serializes writes implicitly so this is a
+    # no-op there.
+    #
+    # Dialect is checked against the actual session binding, NOT the
+    # `is_sqlite()` helper, because the test fixture overrides `get_db` with a
+    # SQLite engine while `settings.database_url` still points at Postgres
+    # (the helper reads settings). Inspecting the connection directly is the
+    # right shape for any code that mutates SQL based on the live dialect.
+    from sqlalchemy import text
+
+    bind = db.get_bind()
+    if bind.dialect.name == "postgresql":
+        scope_key = data.printer_id if data.printer_id is not None else 0
+        # 1625 namespaces the lock so it can't collide with other advisory
+        # locks elsewhere in the codebase.
+        await db.execute(text("SELECT pg_advisory_xact_lock(1625, :k)"), {"k": scope_key})
+
     insert_position = max(1, data.insert_position or 1)
     if data.insert_at_top or data.insert_position is not None:
         result = await db.execute(select(func.max(PrintQueueItem.position)).where(*queue_scope))
@@ -1229,18 +1253,38 @@ async def cancel_queue_item(
 async def stop_queue_item(
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    _: User | None = RequirePermissionIfAuthEnabled(Permission.QUEUE_UPDATE_ALL),
+    auth_result: tuple[User | None, bool] = Depends(
+        require_ownership_permission(
+            Permission.QUEUE_UPDATE_ALL,
+            Permission.QUEUE_UPDATE_OWN,
+        )
+    ),
 ):
-    """Stop an actively printing queue item."""
+    """Stop an actively printing queue item.
+
+    Ownership-scoped (#1625-followup): callers with QUEUE_UPDATE_OWN can stop
+    their own items; callers with QUEUE_UPDATE_ALL can stop any item. Mirrors
+    the /cancel shape. Pre-fix this required QUEUE_UPDATE_ALL — Operators
+    holding only _OWN saw the Stop button in the queue UI but got 403 on click.
+    """
 
     from backend.app.models.smart_plug import SmartPlug
     from backend.app.services.printer_manager import printer_manager
     from backend.app.services.tasmota import tasmota_service
 
+    user, can_modify_all = auth_result
+
     result = await db.execute(select(PrintQueueItem).where(PrintQueueItem.id == item_id))
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(404, "Queue item not found")
+
+    # Ownership check — mirrors /cancel. Ownerless items (created_by_id IS NULL)
+    # require _ALL: stop is destructive and an _OWN holder can't claim "they
+    # own it" the way /start does (#1670).
+    if not can_modify_all and user is not None:
+        if item.created_by_id is None or item.created_by_id != user.id:
+            raise HTTPException(403, "You can only stop your own queue items")
 
     if item.status != "printing":
         raise HTTPException(400, f"Can only stop items that are printing, current status: '{item.status}'")
@@ -1311,9 +1355,20 @@ async def start_queue_item(
     item_id: int,
     skip_filament_check: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
-    user: User | None = RequirePermissionIfAuthEnabled(Permission.QUEUE_UPDATE_OWN),
+    auth_result: tuple[User | None, bool] = Depends(
+        require_ownership_permission(
+            Permission.QUEUE_UPDATE_ALL,
+            Permission.QUEUE_UPDATE_OWN,
+        )
+    ),
 ):
     """Manually start a staged (manual_start) queue item.
+
+    Ownership-scoped (#1625-followup): callers with QUEUE_UPDATE_OWN can
+    start their own items + claim ownership of NULL-owner items (VP-uploaded
+    items arrive unattributed per #1670). Callers with QUEUE_UPDATE_ALL can
+    start any item. Pre-fix this required QUEUE_UPDATE_OWN with no ownership
+    check, so _OWN holders could start anyone's queue items via direct API.
 
     Clears the manual_start flag so the scheduler picks it up. When
     ``skip_filament_check`` is false (the default) the live filament
@@ -1322,6 +1377,8 @@ async def start_queue_item(
     payload so the caller can show a confirm dialog and retry with
     ``skip_filament_check=true``.
     """
+    user, can_modify_all = auth_result
+
     result = await db.execute(
         select(PrintQueueItem)
         .options(
@@ -1335,6 +1392,14 @@ async def start_queue_item(
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(404, "Queue item not found")
+
+    # Ownership check — softer than /cancel because /start is the entry point
+    # for #1670's VP-import flow: an unowned item is claimable by the first
+    # _OWN holder who clicks ▶, and the route below credits them as owner.
+    # An item with a DIFFERENT owner → 403.
+    if not can_modify_all and user is not None:
+        if item.created_by_id is not None and item.created_by_id != user.id:
+            raise HTTPException(403, "You can only start your own queue items")
 
     if item.status != "pending":
         raise HTTPException(400, f"Can only start pending items, current status: '{item.status}'")

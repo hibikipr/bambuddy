@@ -2684,3 +2684,126 @@ class TestResumeQueueAfterFailure:
 
         second = await async_client.post(f"/api/v1/queue/printer/{printer.id}/resume")
         assert second.json() == {"acknowledged": 0, "restored": 0}
+
+
+class TestReorderEndpoint:
+    """Tests for the /queue/reorder endpoint (#1625-followup duplicate-position validator)."""
+
+    @pytest.fixture
+    async def printer_factory(self, db_session):
+        async def _create(**kwargs):
+            from backend.app.models.printer import Printer
+
+            defaults = {
+                "name": "Reorder Test Printer",
+                "ip_address": "192.168.1.220",
+                "serial_number": "TESTREORDER001",
+                "access_code": "12345678",
+                "model": "X1C",
+            }
+            defaults.update(kwargs)
+            printer = Printer(**defaults)
+            db_session.add(printer)
+            await db_session.commit()
+            await db_session.refresh(printer)
+            return printer
+
+        return _create
+
+    @pytest.fixture
+    async def archive_factory(self, db_session):
+        _counter = [0]
+
+        async def _create(**kwargs):
+            from backend.app.models.archive import PrintArchive
+
+            _counter[0] += 1
+            defaults = {
+                "filename": f"reorder_{_counter[0]}.3mf",
+                "print_name": f"Reorder {_counter[0]}",
+                "file_path": f"/tmp/reorder_{_counter[0]}.3mf",
+                "file_size": 1024,
+                "content_hash": f"reorderhash{_counter[0]:06d}",
+                "status": "completed",
+            }
+            defaults.update(kwargs)
+            archive = PrintArchive(**defaults)
+            db_session.add(archive)
+            await db_session.commit()
+            await db_session.refresh(archive)
+            return archive
+
+        return _create
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_reorder_rejects_duplicate_positions(
+        self, async_client: AsyncClient, db_session, printer_factory, archive_factory
+    ):
+        """Reorder payload with duplicate positions → 422 at schema layer.
+
+        Regression guard: pre-fix, a buggy client sending two items at the
+        same position would leave the queue in an inconsistent state (the
+        scheduler's ORDER BY (printer_id, position) tie would be broken by
+        physical row order — non-deterministic dispatch order).
+        """
+        from backend.app.models.print_queue import PrintQueueItem
+
+        printer = await printer_factory()
+        a1 = await archive_factory()
+        a2 = await archive_factory()
+        item1 = PrintQueueItem(printer_id=printer.id, archive_id=a1.id, status="pending", position=1)
+        item2 = PrintQueueItem(printer_id=printer.id, archive_id=a2.id, status="pending", position=2)
+        db_session.add_all([item1, item2])
+        await db_session.commit()
+        await db_session.refresh(item1)
+        await db_session.refresh(item2)
+
+        response = await async_client.post(
+            "/api/v1/queue/reorder",
+            json={
+                "items": [
+                    {"id": item1.id, "position": 1},
+                    {"id": item2.id, "position": 1},  # duplicate
+                ]
+            },
+        )
+        assert response.status_code == 422
+        body = response.json()
+        # Pydantic v2 wraps custom validator errors; the message must mention "Duplicate"
+        # so the FE can surface the actionable detail.
+        assert any("duplicate" in str(err).lower() for err in body.get("detail", []))
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_reorder_accepts_unique_positions(
+        self, async_client: AsyncClient, db_session, printer_factory, archive_factory
+    ):
+        """Reorder with unique positions succeeds and updates them in DB."""
+        from backend.app.models.print_queue import PrintQueueItem
+
+        printer = await printer_factory()
+        a1 = await archive_factory()
+        a2 = await archive_factory()
+        item1 = PrintQueueItem(printer_id=printer.id, archive_id=a1.id, status="pending", position=1)
+        item2 = PrintQueueItem(printer_id=printer.id, archive_id=a2.id, status="pending", position=2)
+        db_session.add_all([item1, item2])
+        await db_session.commit()
+        await db_session.refresh(item1)
+        await db_session.refresh(item2)
+
+        response = await async_client.post(
+            "/api/v1/queue/reorder",
+            json={
+                "items": [
+                    {"id": item1.id, "position": 2},
+                    {"id": item2.id, "position": 1},
+                ]
+            },
+        )
+        assert response.status_code == 200
+
+        await db_session.refresh(item1)
+        await db_session.refresh(item2)
+        assert item1.position == 2
+        assert item2.position == 1

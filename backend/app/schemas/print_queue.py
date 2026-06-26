@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, PlainSerializer
+from pydantic import BaseModel, PlainSerializer, model_validator
 
 
 # Custom serializer to ensure UTC datetimes have Z suffix
@@ -189,6 +189,30 @@ class PrintQueueReorderItem(BaseModel):
 
 class PrintQueueReorder(BaseModel):
     items: list[PrintQueueReorderItem]
+
+    @model_validator(mode="after")
+    def _validate_positions_unique(self) -> "PrintQueueReorder":
+        """Reject reorder requests with duplicate positions in the payload
+        (#1625-followup).
+
+        The /reorder route is the drag-drop renumber path on the queue UI;
+        a well-behaved client sends a contiguous renumbering of a single
+        printer's pending queue. A buggy client that sends two items at
+        the same position would leave the queue in an inconsistent state
+        (scheduler's ORDER BY (printer_id, position) ties get broken by
+        physical row order). Fail closed at the schema boundary so the
+        bug is caught before any DB mutation.
+
+        Uniqueness is enforced WITHIN THE PAYLOAD only — cross-printer
+        reorders that intentionally share positions across different
+        printer queues are a non-goal of the drag-drop UI, so this is the
+        right scope.
+        """
+        positions = [it.position for it in self.items]
+        if len(positions) != len(set(positions)):
+            duplicates = sorted({p for p in positions if positions.count(p) > 1})
+            raise ValueError(f"Duplicate positions in reorder request: {duplicates}")
+        return self
 
 
 class PrintQueueBulkUpdate(BaseModel):
