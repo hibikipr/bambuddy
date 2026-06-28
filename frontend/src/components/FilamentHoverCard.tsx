@@ -192,7 +192,7 @@ export function FilamentHoverCard({ data, children, disabled, className = '', sp
       {isVisible && createPortal(
         <div
           ref={cardRef}
-          className="fixed z-[60] animate-in fade-in-0 zoom-in-95 duration-150"
+          className="fixed z-[60]"
           style={{
             top: coords?.top ?? -9999,
             left: coords?.left ?? -9999,
@@ -578,7 +578,7 @@ export function EmptySlotHoverCard({ children, className = '', configureSlot, on
       {isVisible && createPortal(
         <div
           ref={cardRef}
-          className="fixed z-[60] animate-in fade-in-0 zoom-in-95 duration-150"
+          className="fixed z-[60]"
           style={{
             top: coords?.top ?? -9999,
             left: coords?.left ?? -9999,
