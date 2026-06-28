@@ -2898,13 +2898,13 @@ export interface ExternalLinkUpdate {
 // Permission type - all available permissions
 export type Permission =
   | 'printers:read' | 'printers:create' | 'printers:update' | 'printers:delete' | 'printers:control' | 'printers:files' | 'printers:ams_rfid' | 'printers:clear_plate'
-  | 'archives:read' | 'archives:create'
+  | 'archives:read' | 'archives:read_own' | 'archives:read_all' | 'archives:create'
   | 'archives:update_own' | 'archives:update_all' | 'archives:delete_own' | 'archives:delete_all'
   | 'archives:reprint_own' | 'archives:reprint_all' | 'archives:purge'
-  | 'queue:read' | 'queue:create'
+  | 'queue:read' | 'queue:read_own' | 'queue:read_all' | 'queue:create'
   | 'queue:update_own' | 'queue:update_all' | 'queue:delete_own' | 'queue:delete_all'
   | 'queue:reorder'
-  | 'library:read' | 'library:upload'
+  | 'library:read' | 'library:read_own' | 'library:read_all' | 'library:upload'
   | 'library:update_own' | 'library:update_all' | 'library:delete_own' | 'library:delete_all'
   | 'library:purge'
   | 'projects:read' | 'projects:create' | 'projects:update' | 'projects:delete'
