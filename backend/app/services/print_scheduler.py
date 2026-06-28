@@ -1981,6 +1981,14 @@ class PrintScheduler:
         # manual_start) and "scheduler re-blocked" (this method re-flags it
         # on identical spool state) (#1698-followup).
         if item.skip_filament_check:
+            # #1762 diagnostic: surface the short-circuit at INFO so a
+            # future "Print Anyway didn't work" report (e.g. issue #1762
+            # comment 3) has actionable evidence in the support bundle
+            # without needing DEBUG enabled.
+            logger.info(
+                "Queue item %s honouring user's Print Anyway acknowledgement — skipping deficit check",
+                item.id,
+            )
             return False
 
         try:

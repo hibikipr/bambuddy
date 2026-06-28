@@ -3064,6 +3064,21 @@ async def run_migrations(conn):
             orphan_count,
         )
 
+    # Migration: Add on_ai_failure_detection column to notification_providers (#1794).
+    # Splits Obico AI failure detection out of the multiplexed on_printer_error
+    # event so users can subscribe to spaghetti alerts independently of HMS
+    # hardware-error alerts. Postgres rejects `DEFAULT 0` for BOOLEAN columns.
+    if is_sqlite():
+        await _safe_execute(
+            conn,
+            "ALTER TABLE notification_providers ADD COLUMN on_ai_failure_detection BOOLEAN DEFAULT 0",
+        )
+    else:
+        await _safe_execute(
+            conn,
+            "ALTER TABLE notification_providers ADD COLUMN on_ai_failure_detection BOOLEAN DEFAULT false",
+        )
+
 
 async def seed_notification_templates():
     """Seed default notification templates if they don't exist."""
