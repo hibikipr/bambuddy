@@ -29,32 +29,32 @@ jobs:
         with:
           path: source
 
-      # actions/checkout@v4 was hiding the underlying git stderr behind
-      # an opaque "exit code 1" even with the same PAT jgehrcke writes
-      # gh-pages with. Direct git clone surfaces the real error if
-      # anything goes wrong and avoids the wildcard-refspec dance
-      # actions/checkout does for fetch-depth=1.
-      - name: checkout-gh-pages
+      # jgehrcke/github-repo-stats commits to the `github-repo-stats`
+      # branch by default (NOT gh-pages — Pages is configured to serve
+      # from that branch). Direct git clone with the PAT surfaces real
+      # git stderr if anything fails, unlike actions/checkout@v4 which
+      # swallows errors as opaque "exit code 1".
+      - name: checkout-data-branch
         env:
           GH_PAT: ${{ secrets.GHRS_GITHUB_API_TOKEN }}
         run: |
-          git clone --branch gh-pages --depth 1 \
+          git clone --branch github-repo-stats --depth 1 \
             "https://x-access-token:${GH_PAT}@github.com/${{ github.repository }}.git" \
-            gh-pages
-          cd gh-pages
+            data
+          cd data
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: inject-ghcr-pulls
         run: |
           python3 source/.github/scripts/ghcr_inject.py \
-            --report gh-pages/maziggy/bambuddy/latest-report/report.html \
-            --csv    gh-pages/maziggy/bambuddy/ghcr-pulls.csv \
+            --report data/maziggy/bambuddy/latest-report/report.html \
+            --csv    data/maziggy/bambuddy/ghcr-pulls.csv \
             --owner  maziggy \
             --pkg    bambuddy
 
       - name: commit-and-push
-        working-directory: gh-pages
+        working-directory: data
         run: |
           if [ -z "$(git status --porcelain)" ]; then
             echo "no changes — skipping commit"
