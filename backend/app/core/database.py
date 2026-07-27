@@ -3817,16 +3817,36 @@ async def _migrate_backfill_spool_codes(conn) -> None:
     itself) whose kind disagrees with the current classification — covers
     spools created by an earlier, buggier build of this feature on this
     branch. Matching on (spool_id, code) is unique per the table's constraint,
-    so this and the insert are both safe to re-run on every startup.
+    so this and the insert are both safe to re-run.
+
+    Gated to run **exactly once** via a settings flag, same as the #2614
+    plate-filament backfill: without it, this re-scans every spool with a
+    barcode on every single boot forever, an O(N) query cost that grows
+    without bound as the inventory grows. The forward write path (persisting
+    a scanned barcode) already keeps spool_code correct for everything
+    scanned after this migration runs once.
     """
     from sqlalchemy import text
 
     from backend.app.schemas.spool import classify_code
 
+    flag = "_backfill_1880_spool_codes_done"
+
     async with conn.begin_nested():
+        already = (
+            await conn.execute(text('SELECT value FROM settings WHERE "key" = :k'), {"k": flag})
+        ).scalar_one_or_none()
+        if already:
+            return
+
         rows = (await conn.execute(text("SELECT id, barcode FROM spool WHERE barcode IS NOT NULL"))).all()
         for spool_id, barcode in rows:
             code, kind = classify_code(barcode)
+            if not code:
+                # An empty-string (not NULL) barcode classifies to an empty
+                # code — persisting that would create a garbage spool_code
+                # row that never matches any real scan.
+                continue
             existing = (
                 await conn.execute(
                     text("SELECT kind FROM spool_code WHERE spool_id = :spool_id AND code = :code"),
@@ -3846,6 +3866,15 @@ async def _migrate_backfill_spool_codes(conn) -> None:
                     text("UPDATE spool_code SET kind = :kind WHERE spool_id = :spool_id AND code = :code"),
                     {"spool_id": spool_id, "code": code, "kind": kind},
                 )
+
+        # Mark done unconditionally (even when there were no barcoded spools
+        # yet) so this one-shot never re-scans the spool table on subsequent
+        # boots. id/timestamps come from the table's own defaults; "key" is
+        # quoted as it's a keyword.
+        await conn.execute(
+            text('INSERT INTO settings ("key", value) VALUES (:k, :v)'),
+            {"k": flag, "v": "true"},
+        )
 
 
 _USER_PRINT_TEMPLATE_RENAMES: tuple[tuple[str, str, str], ...] = (

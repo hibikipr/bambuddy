@@ -13,25 +13,21 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from backend.app.core.database import _migrate_backfill_spool_codes
+import backend.app.models  # noqa: F401 - populate Base.metadata
+from backend.app.core.database import Base, _migrate_backfill_spool_codes
 
 
 @pytest.fixture
 async def engine():
-    """In-memory SQLite with just the spool + spool_code tables.
+    """In-memory SQLite with the full model set.
 
-    The migration only touches these two tables, so the fixture avoids
-    registering every model in the project just to satisfy run_migrations's
-    broader DDL surface (same rationale as the user-print-template rename
-    migration test).
+    The migration itself only touches spool + spool_code, but it's now gated
+    behind a one-shot settings flag (same pattern as the #2614 migration), so
+    the settings table needs to exist too.
     """
-    from backend.app.models.spool import Spool
-    from backend.app.models.spool_code import SpoolCode
-
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
-        await conn.run_sync(Spool.__table__.create)
-        await conn.run_sync(SpoolCode.__table__.create)
+        await conn.run_sync(Base.metadata.create_all)
     try:
         yield engine
     finally:
@@ -133,6 +129,45 @@ async def test_spool_without_barcode_gets_no_code_row(engine):
 
     async with engine.begin() as conn:
         assert await _codes_for(conn, 1) == []
+
+
+async def test_empty_string_barcode_gets_no_code_row(engine):
+    """barcode = '' is NOT NULL, so it isn't filtered out by the migration's
+    WHERE clause the way a real NULL is — classify_code('') would otherwise
+    backfill a garbage empty-code row that can never match a real scan."""
+    async with engine.begin() as conn:
+        await _insert_spool(conn, 1, "")
+
+    async with engine.begin() as conn:
+        await _migrate_backfill_spool_codes(conn)
+
+    async with engine.begin() as conn:
+        assert await _codes_for(conn, 1) == []
+
+
+async def test_one_shot_gate_prevents_rescan_on_later_boots(engine):
+    """After the first pass writes its settings flag, a later boot does no
+    work — without this gate, the migration would re-scan every barcoded
+    spool on every single startup forever, an O(N) cost with no ceiling."""
+    async with engine.begin() as conn:
+        await _insert_spool(conn, 1, "6938936716785")
+
+    async with engine.begin() as conn:
+        await _migrate_backfill_spool_codes(conn)  # backfills spool 1, writes the flag
+
+    # A new barcoded spool appears after the one-shot already ran.
+    async with engine.begin() as conn:
+        await _insert_spool(conn, 2, "12345678901234")
+
+    async with engine.begin() as conn:
+        await _migrate_backfill_spool_codes(conn)  # gate short-circuits; no scan
+
+    async with engine.begin() as conn:
+        assert len(await _codes_for(conn, 1)) == 1
+        # Deliberately not backfilled: the gate skipped the whole pass. New
+        # spools can't need this anyway — the forward write path (persisting
+        # a scanned barcode) keeps spool_code correct going forward.
+        assert await _codes_for(conn, 2) == []
 
 
 async def test_migration_is_idempotent(engine):
