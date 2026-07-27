@@ -2,7 +2,7 @@ import json
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Path, Query, UploadFile
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, func, select
@@ -31,6 +31,7 @@ from backend.app.models.spool_k_profile import SpoolKProfile
 from backend.app.models.user import User
 from backend.app.schemas.location import LocationCreate, LocationResponse, LocationUpdate
 from backend.app.schemas.spool import (
+    ALLOWED_EFFECT_TYPES,
     MAX_EXTRA_COLOR_STOPS,
     BarcodeLookupResponse,
     LabelParseResponse,
@@ -1110,25 +1111,35 @@ def _derive_effect_type(variant: dict) -> str | None:
     """
     hexes = variant.get("hexes") or []
     direction = variant.get("multi_color_direction")
+    derived: str | None = None
     if direction and len(hexes) >= 2:
         if direction == "longitudinal":
-            return "gradient"
-        if len(hexes) == 2:
-            return "dual-color"
-        if len(hexes) == 3:
-            return "tri-color"
-        return "multicolor"
-    if variant.get("glow"):
-        return "glow"
-    if variant.get("pattern") == "sparkle":
-        return "sparkle"
-    if variant.get("pattern") == "marble":
-        return "marble"
-    if variant.get("translucent"):
-        return "translucent"
-    if variant.get("finish") == "matte":
-        return "matte"
-    return None
+            derived = "gradient"
+        elif len(hexes) == 2:
+            derived = "dual-color"
+        elif len(hexes) == 3:
+            derived = "tri-color"
+        else:
+            derived = "multicolor"
+    elif variant.get("glow"):
+        derived = "glow"
+    elif variant.get("pattern") == "sparkle":
+        derived = "sparkle"
+    elif variant.get("pattern") == "marble":
+        derived = "marble"
+    elif variant.get("translucent"):
+        derived = "translucent"
+    elif variant.get("finish") == "matte":
+        derived = "matte"
+
+    # Belt-and-braces: every branch above already returns a value that's
+    # currently in ALLOWED_EFFECT_TYPES, but nothing enforced that — a typo or
+    # a drift between this function and the schema enum would otherwise write
+    # a value the spool form / rendering code has never heard of.
+    if derived is not None and derived not in ALLOWED_EFFECT_TYPES:
+        logger.warning("_derive_effect_type produced %r, not in ALLOWED_EFFECT_TYPES - dropping it", derived)
+        return None
+    return derived
 
 
 @router.post("/colors/sync-spoolmandb-community")
@@ -1665,7 +1676,10 @@ async def _persist_barcode_codes_for_spool(db: AsyncSession, spool_id: int, barc
 
 @router.get("/barcode/{barcode}", response_model=BarcodeLookupResponse)
 async def lookup_barcode(
-    barcode: str,
+    # Matches Spool.barcode's VARCHAR(64) / SpoolCreate/SpoolUpdate's max_length
+    # — without this, an arbitrarily long path segment reached classify_code
+    # and the external-lookup chain unbounded.
+    barcode: str = Path(..., max_length=64),
     db: AsyncSession = Depends(get_db),
     _: User | None = RequirePermissionIfAuthEnabled(Permission.INVENTORY_READ),
 ):
@@ -1712,10 +1726,17 @@ async def parse_label(
     """
     settings = await _load_settings_map(db)
 
-    try:
-        extra_brands = await ofd_client.get_brands()
-    except Exception:
-        extra_brands = []
+    # _resolve_barcode below already honors this for the actual barcode
+    # lookup, but get_brands() is a standalone OFD call used only for the
+    # text-heuristic brand hints - without this check it hit OFD even with
+    # Scan-to-Add Barcode Lookup turned off.
+    lookup_enabled = settings.get("barcode_lookup_enabled", "true") == "true"
+    extra_brands: list[str] = []
+    if lookup_enabled:
+        try:
+            extra_brands = await ofd_client.get_brands()
+        except Exception:
+            extra_brands = []
     guessed = parse_title(payload.text, extra_brands=extra_brands)
     # diameter_mm has no home on Spool — it's parse-only context, not persisted.
     guessed.pop("diameter_mm", None)

@@ -482,6 +482,24 @@ class TestParseLabelEndpoint:
         assert result.linked_codes == []
 
     @pytest.mark.asyncio
+    async def test_skips_get_brands_when_lookup_disabled(self):
+        """_resolve_barcode already honors barcode_lookup_enabled for the
+        actual barcode resolution, but get_brands() is a separate OFD call
+        used only for text-heuristic brand hints - it must respect the
+        setting too, not hit OFD regardless of the toggle."""
+        db = _db(settings_rows=[_make_settings_row("barcode_lookup_enabled", "false")])
+
+        with patch("backend.app.services.ofd_client.get_brands", new=AsyncMock(return_value=["Sunlu"])) as mock_brands:
+            result = await parse_label(
+                payload=LabelParseRequest(text="SUNLU PLA+ Filament 1.75mm Black 1KG"),
+                db=db,
+                _=None,
+            )
+
+        mock_brands.assert_not_called()
+        assert result.brand == "Sunlu"  # still recognized via the built-in brand list, just not OFD's extra one
+
+    @pytest.mark.asyncio
     async def test_embedded_barcode_resolved_and_overrides_guesses(self):
         db = _db()
         ofd_fields = {"material": "PETG", "brand": "Overture", "label_weight": 500}

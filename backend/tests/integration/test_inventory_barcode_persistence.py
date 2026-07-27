@@ -306,3 +306,25 @@ class TestReadPathResolvesOwnInventoryThroughRealSql:
         mock_ofd_article.assert_not_called()
         mock_smdb.assert_not_called()
         mock_smdb_sku.assert_not_called()
+
+
+class TestBarcodePathParamLengthLimit:
+    """The GET /barcode/{barcode} path param had no max_length, so an
+    arbitrarily long path segment reached classify_code and the external-
+    lookup chain unbounded. This only takes effect through FastAPI's real
+    request parsing, so it needs a real HTTP round-trip, not a direct call to
+    the route function (see test_barcode_lookup_endpoints.py for those)."""
+
+    async def test_barcode_over_max_length_is_rejected(self, async_client: AsyncClient):
+        p1, p2, p3, p4 = _patch_external()
+        with p1, p2, p3, p4:
+            resp = await async_client.get(f"/api/v1/inventory/barcode/{'1' * 65}")
+
+        assert resp.status_code == 422
+
+    async def test_barcode_at_max_length_is_accepted(self, async_client: AsyncClient):
+        p1, p2, p3, p4 = _patch_external()
+        with p1, p2, p3, p4:
+            resp = await async_client.get(f"/api/v1/inventory/barcode/{'1' * 64}")
+
+        assert resp.status_code == 200
