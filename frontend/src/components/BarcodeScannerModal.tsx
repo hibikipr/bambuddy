@@ -62,9 +62,19 @@ function guessDeviceHasCamera(): boolean {
 function loadImageFile(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Failed to load image'));
-    img.src = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    // The image only needs the blob URL long enough to decode into the <img> -
+    // once that's happened (or failed) the URL itself is never used again, so
+    // revoke it either way instead of leaking it for the rest of the page's life.
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Failed to load image'));
+    };
+    img.src = objectUrl;
   });
 }
 
@@ -101,23 +111,46 @@ function scoreOcrText(text: string): number {
 async function ocrBestOrientation(file: File, onProgress: (message: string) => void): Promise<string> {
   const Tesseract = await import('tesseract.js');
   const img = await loadImageFile(file);
-  let best = { text: '', score: -1 };
-  for (const deg of [0, 90, 270, 180]) {
-    const canvas = rotatedCanvas(img, deg, 1600);
-    const { data } = await Tesseract.recognize(canvas, 'eng', {
-      logger: (m) => {
-        if (m.status === 'recognizing text') {
-          const suffix = deg ? ` (${deg}°)` : '';
-          onProgress(`${Math.round(m.progress * 100)}%${suffix}`);
-        }
-      },
-    });
-    const text = (data.text || '').replace(/\s+/g, ' ').trim();
-    const score = scoreOcrText(text);
-    if (score > best.score) best = { text, score };
-    if (score >= 120) break; // strong result — no need to try more rotations
+  // `currentDeg` is read by the logger closure below, which is created once at
+  // worker startup but needs to reflect whichever rotation is in flight - it's
+  // reassigned each loop iteration rather than recreating the logger per call.
+  let currentDeg = 0;
+  const worker = await Tesseract.createWorker('eng', Tesseract.OEM.LSTM_ONLY, {
+    // Fully local, no CDN: Tesseract.js defaults to fetching the worker script,
+    // WASM core, and language data from cdn.jsdelivr.net at runtime, which
+    // silently fails offline and is otherwise the only un-opted external
+    // request this app makes. Bambuddy is frequently self-hosted air-gapped.
+    // See public/tesseract/README.md for what these files are and how to
+    // refresh them when tesseract.js/tesseract.js-core are upgraded.
+    workerPath: '/tesseract/worker.min.js',
+    corePath: '/tesseract/tesseract-core-lstm.wasm.js',
+    langPath: '/tesseract',
+    logger: (m) => {
+      if (m.status === 'recognizing text') {
+        const suffix = currentDeg ? ` (${currentDeg}°)` : '';
+        onProgress(`${Math.round(m.progress * 100)}%${suffix}`);
+      }
+    },
+  });
+  try {
+    let best = { text: '', score: -1 };
+    for (const deg of [0, 90, 270, 180]) {
+      currentDeg = deg;
+      const canvas = rotatedCanvas(img, deg, 1600);
+      const { data } = await worker.recognize(canvas);
+      const text = (data.text || '').replace(/\s+/g, ' ').trim();
+      const score = scoreOcrText(text);
+      if (score > best.score) best = { text, score };
+      if (score >= 120) break; // strong result — no need to try more rotations
+    }
+    return best.text;
+  } finally {
+    // One worker reused across every rotation attempt. The previous
+    // Tesseract.recognize() convenience call spun up (and tore down) a brand
+    // new worker - full WASM core + language data load included - per
+    // rotation, up to 4x for a single photo.
+    await worker.terminate();
   }
-  return best.text;
 }
 
 function getSourceLabel(

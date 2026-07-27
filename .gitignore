@@ -24,6 +24,13 @@ build/
 # Node
 frontend/node_modules/
 frontend/coverage/
+
+# Regenerated from node_modules by scripts/copy-tesseract-assets.mjs
+# (postinstall) - multi-MB binaries that don't belong in git history. See
+# frontend/public/tesseract/README.md.
+frontend/public/tesseract/*.js
+frontend/public/tesseract/*.wasm
+frontend/public/tesseract/*.gz
 npm-debug.log*
 
 # Database
