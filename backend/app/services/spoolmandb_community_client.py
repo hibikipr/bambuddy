@@ -55,6 +55,11 @@ SPOOLMANDB_COMMUNITY_TTL_SECONDS = 24 * 3600
 # usage, but firm enough to abort instead of buffering an unbounded body.
 _MAX_TARBALL_BYTES = 64 * 1024 * 1024
 _MAX_MEMBER_BYTES = 8 * 1024 * 1024
+# The per-member cap alone doesn't bound the sum across many members - a
+# tarball with thousands of entries each just under _MAX_MEMBER_BYTES would
+# still decompress to a huge total in memory. This is the residual
+# decompression-bomb guard on top of that.
+_MAX_TOTAL_DECOMPRESSED_BYTES = 256 * 1024 * 1024
 
 # Bump whenever the on-disk cache shape changes, so an old cache file (e.g.
 # pre-dating codes/SKU support and the gtin/sku index split) is treated as
@@ -215,6 +220,7 @@ async def _download_and_parse_variants() -> list[dict]:
         raw = bytes(chunks)
 
     variants: list[dict] = []
+    total_decompressed = 0
     with tarfile.open(fileobj=io.BytesIO(raw), mode="r:gz") as tar:
         for member in tar.getmembers():
             if not member.isfile():
@@ -237,6 +243,12 @@ async def _download_and_parse_variants() -> list[dict]:
             if len(content) > _MAX_MEMBER_BYTES:
                 logger.warning("Skipping SpoolmanDB-Community source file %s - exceeds size cap", member.name)
                 continue
+            total_decompressed += len(content)
+            if total_decompressed > _MAX_TOTAL_DECOMPRESSED_BYTES:
+                raise ValueError(
+                    f"SpoolmanDB-Community tarball's decompressed contents exceeded "
+                    f"{_MAX_TOTAL_DECOMPRESSED_BYTES} byte cap - aborting"
+                )
             try:
                 data = json.loads(content)
             except (json.JSONDecodeError, ValueError):
@@ -253,8 +265,16 @@ def _all_codes_for(variant: dict) -> list[dict]:
     """Every GTIN/SKU sibling for one color: eans + eans_refill + codes (SKUs)."""
     codes: list[dict] = []
     for barcode in variant.get("eans", []):
+        # canon() assumes a string (re.sub raises TypeError on anything else) -
+        # guarded the same way the SKU loop below already is. A single
+        # malformed upstream source file with a numeric EAN would otherwise
+        # raise here and abort the whole refresh for every manufacturer.
+        if not isinstance(barcode, str) or not barcode.strip():
+            continue
         codes.append({"code": canon(barcode), "kind": "gtin", "is_refill": False})
     for barcode in variant.get("eans_refill", []):
+        if not isinstance(barcode, str) or not barcode.strip():
+            continue
         codes.append({"code": canon(barcode), "kind": "gtin", "is_refill": True})
     for sku in variant.get("codes", []):
         if not isinstance(sku, str) or not sku.strip():

@@ -169,6 +169,21 @@ class TestAllCodesFor:
         v = next(v for v in variants if v["color_name"] == "No Barcode Blue")
         assert smdb._all_codes_for(v) == []
 
+    def test_non_string_ean_is_skipped_not_raised(self):
+        """Covers the review finding: canon() assumes a string and raises
+        TypeError on anything else - eans/eans_refill weren't type-guarded the
+        way the SKU (codes) list already is, so a single malformed upstream
+        source file with a numeric EAN would abort the whole refresh instead
+        of just skipping that one bad entry."""
+        v = {"eans": [6975337031345, "6975337031346"], "eans_refill": [None], "codes": []}
+        codes = smdb._all_codes_for(v)
+        assert codes == [{"code": "6975337031346", "kind": "gtin", "is_refill": False}]
+
+    def test_non_string_sku_is_skipped_not_raised(self):
+        v = {"eans": [], "eans_refill": [], "codes": [12345, "  ", "REAL-SKU"]}
+        codes = smdb._all_codes_for(v)
+        assert codes == [{"code": "REAL-SKU", "kind": "sku", "is_refill": False}]
+
 
 class TestBuildIndex:
     def test_indexes_eans_and_eans_refill_in_gtin_index(self):
@@ -490,6 +505,27 @@ class TestDownloadAndParseVariantsSizeCaps:
         variants = await smdb._download_and_parse_variants()
 
         assert {v["manufacturer"] for v in variants} == {"Small Co"}
+
+    @pytest.mark.asyncio
+    async def test_total_decompressed_size_over_cap_raises(self, monkeypatch):
+        """Covers the review finding: the per-member cap alone doesn't bound
+        the sum across many members - many small files, each individually
+        under _MAX_MEMBER_BYTES, must still be rejected once their combined
+        decompressed size crosses _MAX_TOTAL_DECOMPRESSED_BYTES (a residual
+        decompression-bomb angle)."""
+        files = {
+            f"SpoolmanDB-Community-main/filaments/co{i}.json": _manufacturer_json(f"Co {i}", f"{1111111111110 + i}")
+            for i in range(5)
+        }
+        per_member_total = sum(len(content) for content in files.values())
+        # Each file individually passes the per-member cap, but their sum
+        # exceeds a total cap set just below that sum.
+        monkeypatch.setattr(smdb, "_MAX_TOTAL_DECOMPRESSED_BYTES", per_member_total - 1)
+        tarball = _build_tarball(files)
+        monkeypatch.setattr(httpx, "AsyncClient", _mock_client_factory(tarball))
+
+        with pytest.raises(ValueError, match="decompressed contents exceeded"):
+            await smdb._download_and_parse_variants()
 
     @pytest.mark.asyncio
     async def test_total_download_size_over_cap_raises(self, monkeypatch):
