@@ -330,6 +330,9 @@ export default {
     toast: {
       printerDeleted: '프린터가 삭제되었습니다',
       missingSpoolAssignment: '{{printer}}에서 인쇄가 시작되었습니다. 슬롯 할당 누락: {{slots}}',
+      assignmentVerified: '슬롯 {{slot}}에 필라멘트가 로드되었습니다 ({{printer}})',
+      assignmentVerifiedNoKprofile: '{{printer}}의 슬롯 {{slot}}이(가) 로드되었지만 유량 보정 프로파일(K 프로파일)이 적용되지 않았습니다',
+      assignmentNotConfirmed: '{{printer}}의 슬롯 {{slot}} 할당을 확인할 수 없습니다. AMS 슬롯을 확인하세요',
       printerAdded: '프린터가 추가되었습니다',
       printerUpdated: '프린터가 업데이트되었습니다',
       failedToDelete: '프린터 삭제 실패',
@@ -444,7 +447,9 @@ export default {
       waitForLayer: '객체를 건너뛰려면 2층 이상을 기다리세요 (현재 {{layer}}층)',
       skip: '건너뛰기',
       confirmTitle: '객체를 건너뛰시겠습니까?',
-      confirmMessage: '"{{name}}"을(를) 건너뛰시겠습니까? 이 작업은 취소할 수 없습니다.'
+      confirmMessage: '"{{name}}"을(를) 건너뛰시겠습니까? 이 작업은 취소할 수 없습니다.',
+      confirmAllMessage: '남아 있는 모든 개체가 선택되었습니다. 인쇄 작업이 중지됩니다. 계속하시겠습니까?',
+      confirmMultipleMessage: '선택한 {{count}}개의 객체를 건너뛰시겠습니까? 이 작업은 취소할 수 없습니다.',
     },
     confirm: {
       deleteTitle: '프린터 삭제',
@@ -1142,6 +1147,8 @@ export default {
     history: {
       emptyTitle: '아직 기록이 없습니다',
       emptyDescription: '완료·취소·실패한 인쇄가 여기에 표시됩니다.',
+      showMore: '더 보기',
+      showingCount: '{{total}}개 중 {{shown}}개 표시',
     },
     dragGhost: {
       multiCount: '{{count}}개 항목',
@@ -1995,6 +2002,9 @@ export default {
     preheatOverride_inherit: '상속',
     preheatOverride_on: '켜기',
     preheatOverride_off: '끄기',
+    calibrationMode_off: '끄기',
+    calibrationMode_on: '켜기',
+    calibrationMode_auto: '자동',
     preheatTargetOverride: '챔버 목표 재정의 (°C, 비우면 필라멘트 기본값)',
     plateClear: '플레이트 비움 확인',
     requirePlateClear: '플레이트 비움 확인 필요',
@@ -3461,6 +3471,9 @@ export default {
     prints: '인쇄물',
     ascending: '오름차순',
     descending: '내림차순',
+    showModified: '수정 날짜 표시',
+    hideModified: '수정 날짜 숨기기',
+    lastModified: '마지막 수정',
     resultsCount: '전체 {{total}}개 중 {{showing}}개',
     selectAll: '모두 선택',
     deselectAll: '모두 선택 해제',
@@ -5049,6 +5062,8 @@ export default {
     autoOffDescription: '인쇄 완료 시 끄기 (1회)',
     autoOffPersistent: '계속 활성화',
     autoOffPersistentDescription: '1회성 대신 인쇄 사이에 활성화 유지',
+    controlsPrinterPower: '프린터에 전원 공급',
+    controlsPrinterPowerDescription: '이 플러그가 액세서리(필터 팬, 조명)에만 전원을 공급한다면 끄세요. 그렇지 않으면 플러그를 끌 때 프린터가 오프라인으로 표시됩니다.',
     turnOffDelayMode: '끄기 지연 모드',
     time: '시간',
     temp: '온도',

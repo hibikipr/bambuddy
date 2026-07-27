@@ -666,6 +666,7 @@ async def camera_stream(
     # Check for external camera first
     if printer.external_camera_enabled and printer.external_camera_url:
         import time
+        import uuid
 
         from backend.app.services.external_camera import generate_mjpeg_stream
 
@@ -675,21 +676,60 @@ async def camera_stream(
             "Using external camera (%s) for printer %s at %s fps", printer.external_camera_type, printer_id, fps
         )
 
+        # Register the stream into the SAME registries the RTSP/chamber paths use
+        # (#2675) so `/camera/stop` and cleanup_orphaned_streams can find and kill
+        # a leaked ffmpeg holding a USB device open. Before this, external streams
+        # only tracked _active_external_streams and were structurally invisible to
+        # both the stop endpoint and the janitor. The stream_id keeps the
+        # `{printer_id}-` prefix both scanners key on, plus a unique suffix so two
+        # concurrent viewers of one printer don't clobber each other's entry.
+        stream_id = f"{printer_id}-ext-{uuid.uuid4().hex[:8]}"
+        stop_event = asyncio.Event()
+        _disconnect_events[stream_id] = stop_event
         # Track stream start
         _stream_start_times[printer_id] = time.time()
         _active_external_streams.add(printer_id)
+
+        # Mutable holder so the wrapper's finally can unregister whatever process
+        # is currently registered (the RTSP path may respawn across reconnects).
+        current_proc: dict[str, asyncio.subprocess.Process] = {}
+
+        def _register_external_process(proc: asyncio.subprocess.Process) -> None:
+            prev = current_proc.get("proc")
+            if prev is not None and prev.pid != proc.pid:
+                _spawned_ffmpeg_pids.pop(prev.pid, None)
+            current_proc["proc"] = proc
+            _active_streams[stream_id] = proc
+            _spawned_ffmpeg_pids[proc.pid] = time.time()
+            _stream_last_frame_times[stream_id] = time.time()
 
         async def external_stream_wrapper():
             """Wrap external stream to track start/stop and update frame times."""
             try:
                 async for frame in generate_mjpeg_stream(
-                    printer.external_camera_url, printer.external_camera_type, fps
+                    printer.external_camera_url,
+                    printer.external_camera_type,
+                    fps,
+                    on_process=_register_external_process,
+                    stop_event=stop_event,
                 ):
                     # generate_mjpeg_stream already handles rate limiting;
-                    # just track frame times for stall detection
-                    _last_frame_times[printer_id] = time.time()
+                    # track frame times (per-printer + per-stream) for stall detection
+                    now = time.time()
+                    _last_frame_times[printer_id] = now
+                    _stream_last_frame_times[stream_id] = now
                     yield frame
             finally:
+                # Best-effort unregister. If an abrupt disconnect skips this
+                # finally, the registry entries persist — which is exactly what
+                # lets the stop endpoint / janitor reap the leaked process.
+                stop_event.set()
+                proc = current_proc.get("proc")
+                if proc is not None:
+                    _spawned_ffmpeg_pids.pop(proc.pid, None)
+                _active_streams.pop(stream_id, None)
+                _disconnect_events.pop(stream_id, None)
+                _stream_last_frame_times.pop(stream_id, None)
                 _active_external_streams.discard(printer_id)
                 logger.info("External camera stream ended for printer %s", printer_id)
 
@@ -1529,9 +1569,14 @@ async def delete_reference(
 
 
 def _scan_bambu_ffmpeg_pids() -> list[int]:
-    """Scan /proc for ffmpeg processes with Bambu RTSP URLs.
+    """Scan /proc for ffmpeg processes that are ours.
 
-    These are definitely ours — no other software connects to rtsp(s)://bblp:.
+    Two shapes are matched, both unambiguously Bambuddy's:
+    - Bambu RTSP: no other software connects to ``rtsp(s)://bblp:``.
+    - External USB (V4L2): an ffmpeg spawned with ``-f v4l2`` is our USB camera
+      stream (#2675). Only orphans are killed — the caller excludes PIDs still in
+      ``_active_streams``, so a live USB stream (now registered there) is spared.
+
     This catches orphans that survive app restarts and are not in any tracking dict.
     """
     import os
@@ -1544,8 +1589,11 @@ def _scan_bambu_ffmpeg_pids() -> list[int]:
             try:
                 with open(f"/proc/{entry}/cmdline", "rb") as f:
                     cmdline = f.read()
-                # Match both rtsp:// (via TLS proxy) and rtsps:// (direct)
-                if b"ffmpeg" in cmdline and (b"rtsp://bblp:" in cmdline or b"rtsps://bblp:" in cmdline):
+                if b"ffmpeg" not in cmdline:
+                    continue
+                # Match both rtsp:// (via TLS proxy) and rtsps:// (direct), plus
+                # the `-f v4l2` input flag our USB camera command always carries.
+                if b"rtsp://bblp:" in cmdline or b"rtsps://bblp:" in cmdline or b"v4l2" in cmdline:
                     pids.append(int(entry))
             except (OSError, PermissionError, ValueError):
                 continue

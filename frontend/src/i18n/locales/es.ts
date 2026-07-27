@@ -355,6 +355,9 @@ export default {
     toast: {
       printerDeleted: 'Impresora eliminada',
       missingSpoolAssignment: 'Impresión iniciada en {{printer}}. Falta la asignación de bobina para: {{slots}}',
+      assignmentVerified: 'Filamento cargado en la ranura {{slot}} ({{printer}})',
+      assignmentVerifiedNoKprofile: 'Ranura {{slot}} en {{printer}} cargada, pero no se aplicó el perfil de calibración de flujo (perfil K)',
+      assignmentNotConfirmed: 'No se pudo confirmar la asignación de la ranura {{slot}} en {{printer}}: revisa la ranura AMS',
       printerAdded: 'Impresora añadida',
       printerUpdated: 'Impresora actualizada',
       failedToDelete: 'Error al eliminar la impresora',
@@ -478,6 +481,8 @@ export default {
       skip: 'Omitir',
       confirmTitle: '¿Omitir objeto?',
       confirmMessage: '¿Está seguro de que desea omitir "{{name}}"? Esto no se puede deshacer.',
+      confirmAllMessage: 'Se han seleccionado todos los objetos restantes. Esto detendrá el trabajo de impresión. ¿Continuar?',
+      confirmMultipleMessage: '¿Omitir {{count}} objetos seleccionados? Esto no se puede deshacer.',
     },
     // Confirm modals
     confirm: {
@@ -1200,6 +1205,8 @@ export default {
     history: {
       emptyTitle: 'Sin historial todavía',
       emptyDescription: 'Las impresiones completadas, canceladas y fallidas aparecerán aquí.',
+      showMore: 'Mostrar más',
+      showingCount: 'Mostrando {{shown}} de {{total}}',
     },
     dragGhost: {
       multiCount: '{{count}} elementos',
@@ -2117,6 +2124,9 @@ export default {
     preheatOverride_inherit: 'Heredar',
     preheatOverride_on: 'Activado',
     preheatOverride_off: 'Desactivado',
+    calibrationMode_off: 'Desactivado',
+    calibrationMode_on: 'Activado',
+    calibrationMode_auto: 'Automático',
     preheatTargetOverride: 'Sobrescribir objetivo de cámara (°C, vacío = por filamento)',
     plateClear: 'Confirmación de cama despejada',
     requirePlateClear: 'Requerir confirmación de cama despejada',
@@ -3652,6 +3662,9 @@ export default {
     prints: 'Impresiones',
     ascending: 'Ascendente',
     descending: 'Descendente',
+    showModified: 'Mostrar fechas de modificación',
+    hideModified: 'Ocultar fechas de modificación',
+    lastModified: 'Última modificación',
     resultsCount: '{{showing}} de {{total}} archivos',
     selectAll: 'Seleccionar todo',
     deselectAll: 'Deseleccionar todo',
@@ -5327,6 +5340,8 @@ export default {
     autoOffDescription: 'Apagar cuando se completa la impresión (una sola vez)',
     autoOffPersistent: 'Mantener activado',
     autoOffPersistentDescription: 'Permanecer activado entre impresiones en lugar de una sola vez',
+    controlsPrinterPower: 'Alimenta la impresora',
+    controlsPrinterPowerDescription: 'Desactívalo si este enchufe solo alimenta un accesorio (ventilador de filtro, luces). De lo contrario, apagarlo marca la impresora como desconectada.',
     autoOffAfterDrying: 'Apagado automático tras el secado',
     autoOffAfterDryingDescription: 'Apagar cuando se completa el secado del AMS',
     delayAfterDryingMinutes: 'Retardo de secado (minutos)',

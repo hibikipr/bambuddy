@@ -355,6 +355,9 @@ export default {
     toast: {
       printerDeleted: '打印机已删除',
       missingSpoolAssignment: '已在{{printer}}上开始打印。以下料槽未分配耗材: {{slots}}',
+      assignmentVerified: '耗材已加载到料槽{{slot}}（{{printer}}）',
+      assignmentVerifiedNoKprofile: '{{printer}}的料槽{{slot}}已加载，但流量校准配置（K配置）未应用',
+      assignmentNotConfirmed: '无法确认{{printer}}上料槽{{slot}}的分配，请检查AMS料槽',
       printerAdded: '打印机已添加',
       printerUpdated: '打印机已更新',
       failedToDelete: '删除打印机失败',
@@ -478,6 +481,8 @@ export default {
       skip: '跳过',
       confirmTitle: '跳过对象？',
       confirmMessage: '确定要跳过"{{name}}"吗？此操作无法撤销。',
+      confirmAllMessage: '已选择所有剩余对象。这将停止打印任务。是否继续？',
+      confirmMultipleMessage: '跳过选中的 {{count}} 个对象？此操作无法撤销。',
     },
     // Confirm modals
     confirm: {
@@ -1200,6 +1205,8 @@ export default {
     history: {
       emptyTitle: '暂无历史',
       emptyDescription: '已完成、已取消和失败的打印将在此显示。',
+      showMore: '显示更多',
+      showingCount: '显示 {{total}} 项中的 {{shown}} 项',
     },
     dragGhost: {
       multiCount: '{{count}} 项',
@@ -2115,6 +2122,9 @@ export default {
     preheatOverride_inherit: '继承',
     preheatOverride_on: '开启',
     preheatOverride_off: '关闭',
+    calibrationMode_off: '关闭',
+    calibrationMode_on: '开启',
+    calibrationMode_auto: '自动',
     preheatTargetOverride: '覆盖腔体目标 (°C，留空使用耗材默认)',
     plateClear: '热床清空确认',
     requirePlateClear: '需要热床清空确认',
@@ -3637,6 +3647,9 @@ export default {
     prints: '打印',
     ascending: '升序',
     descending: '降序',
+    showModified: '显示修改日期',
+    hideModified: '隐藏修改日期',
+    lastModified: '最后修改',
     resultsCount: '{{showing}} / {{total}} 个文件',
     selectAll: '全选',
     deselectAll: '取消全选',
@@ -5307,6 +5320,8 @@ export default {
     autoOffDescription: '打印完成时关闭（一次性）',
     autoOffPersistent: '保持启用',
     autoOffPersistentDescription: '在打印之间保持启用而非一次性',
+    controlsPrinterPower: '为打印机供电',
+    controlsPrinterPowerDescription: '如果此插座仅为配件（滤芯风扇、灯光）供电，请关闭此选项；否则关闭插座会将打印机标记为离线。',
     autoOffAfterDrying: '干燥完成后自动关闭',
     autoOffAfterDryingDescription: 'AMS 干燥完成后关闭',
     delayAfterDryingMinutes: '干燥后延迟（分钟）',

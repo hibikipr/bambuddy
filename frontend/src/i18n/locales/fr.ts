@@ -355,6 +355,9 @@ export default {
     toast: {
       printerDeleted: 'Imprimante supprimée',
       missingSpoolAssignment: 'Impression démarrée sur {{printer}}. Attribution de bobine manquante pour : {{slots}}',
+      assignmentVerified: 'Filament chargé dans l\'emplacement {{slot}} ({{printer}})',
+      assignmentVerifiedNoKprofile: 'Emplacement {{slot}} sur {{printer}} chargé, mais le profil de calibration de débit (profil K) n\'a pas été appliqué',
+      assignmentNotConfirmed: 'Impossible de confirmer l\'attribution de l\'emplacement {{slot}} sur {{printer}} — vérifiez l\'emplacement AMS',
       printerAdded: 'Imprimante ajoutée',
       printerUpdated: 'Imprimante mise à jour',
       failedToDelete: 'Échec de la suppression',
@@ -478,6 +481,8 @@ export default {
       skip: 'Sauter',
       confirmTitle: 'Sauter l\'objet ?',
       confirmMessage: 'Voulez-vous vraiment sauter "{{name}}" ? Cette action est irréversible.',
+      confirmAllMessage: 'Tous les objets restants sont sélectionnés. Cela arrêtera la tâche d’impression. Continuer ?',
+      confirmMultipleMessage: 'Sauter {{count}} objets sélectionnés ? Cette action est irréversible.',
     },
     // Confirm modals
     confirm: {
@@ -1200,6 +1205,8 @@ export default {
     history: {
       emptyTitle: 'Aucun historique',
       emptyDescription: 'Les impressions terminées, annulées et échouées apparaîtront ici.',
+      showMore: 'Afficher plus',
+      showingCount: 'Affichage de {{shown}} sur {{total}}',
     },
     dragGhost: {
       multiCount: '{{count}} éléments',
@@ -2070,6 +2077,9 @@ export default {
     preheatOverride_inherit: 'Hériter',
     preheatOverride_on: 'Activé',
     preheatOverride_off: 'Désactivé',
+    calibrationMode_off: 'Désactivé',
+    calibrationMode_on: 'Activé',
+    calibrationMode_auto: 'Auto',
     preheatTargetOverride: 'Surcharger la cible chambre (°C, vide = par filament)',
     plateClear: 'Confirmation de plateau libre',
     requirePlateClear: 'Exiger la confirmation de plateau libre',
@@ -3638,6 +3648,9 @@ export default {
     prints: 'Impressions',
     ascending: 'Croissant',
     descending: 'Décroissant',
+    showModified: 'Afficher les dates de modification',
+    hideModified: 'Masquer les dates de modification',
+    lastModified: 'Dernière modification',
     resultsCount: '{{showing}} sur {{total}} fichiers',
     selectAll: 'Tout sélectionner',
     deselectAll: 'Tout désélectionner',
@@ -5308,6 +5321,8 @@ export default {
     autoOffDescription: 'Éteindre à la fin de l\'impression (unique)',
     autoOffPersistent: 'Garder activé',
     autoOffPersistentDescription: 'Rester activé entre les impressions au lieu d\'une seule fois',
+    controlsPrinterPower: 'Alimente l\'imprimante',
+    controlsPrinterPowerDescription: 'Désactivez si cette prise n\'alimente qu\'un accessoire (ventilateur de filtre, éclairage). Sinon, l\'éteindre marque l\'imprimante hors ligne.',
     autoOffAfterDrying: 'Arrêt auto après séchage',
     autoOffAfterDryingDescription: 'Éteindre à la fin du séchage de l\'AMS',
     delayAfterDryingMinutes: 'Délai après séchage (minutes)',

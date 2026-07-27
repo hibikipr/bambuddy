@@ -327,6 +327,7 @@ class PrinterManager:
         self._on_layer_change: Callable[[int, int], None] | None = None
         self._on_bed_temp_update: Callable[[int, float], None] | None = None
         self._on_drying_complete: Callable[[int, int], None] | None = None
+        self._on_assignment_verified: Callable[[int, int, int, bool, dict], None] | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         # Track who started the current print (Issue #206)
         self._current_print_user: dict[int, dict] = {}  # {printer_id: {"user_id": int, "username": str}}
@@ -513,6 +514,15 @@ class PrinterManager:
         """
         self._on_drying_complete = callback
 
+    def set_assignment_verified_callback(self, callback: Callable[[int, int, int, bool, dict], None]):
+        """Set callback for spool-assignment read-back verification (#2582).
+
+        Receives ``(printer_id, ams_id, tray_id, verified, detail)``. Fires once
+        per assignment either when the tray telemetry confirms the pushed
+        filament id or when the verification window elapses without it.
+        """
+        self._on_assignment_verified = callback
+
     def _schedule_async(self, coro):
         """Schedule an async coroutine from a sync context.
 
@@ -576,6 +586,10 @@ class PrinterManager:
             if self._on_drying_complete:
                 self._schedule_async(self._on_drying_complete(printer_id, ams_id))
 
+        def on_assignment_verified(ams_id: int, tray_id: int, verified: bool, detail: dict):
+            if self._on_assignment_verified:
+                self._schedule_async(self._on_assignment_verified(printer_id, ams_id, tray_id, verified, detail))
+
         client = BambuMQTTClient(
             ip_address=printer.ip_address,
             serial_number=printer.serial_number,
@@ -590,6 +604,7 @@ class PrinterManager:
             on_drying_complete=on_drying_complete,
             on_print_running_observed=on_print_running_observed,
             on_finish_photo_moment=on_finish_photo_moment,
+            on_assignment_verified=on_assignment_verified,
         )
 
         client.connect()
@@ -683,6 +698,11 @@ class PrinterManager:
 
         This is used when we know the printer power was cut (e.g., smart plug turned off)
         to immediately update the UI without waiting for MQTT timeout.
+
+        The mark is a presumption, not a fact: the plug may not actually feed
+        the printer. ``BambuMQTTClient.mark_power_off`` records the state it
+        overwrites so the client can undo it as soon as the printer sends
+        another report (#2629).
         """
         import logging
 
@@ -690,10 +710,8 @@ class PrinterManager:
 
         if printer_id in self._clients:
             client = self._clients[printer_id]
-            if client.state.connected:
+            if client.mark_power_off():
                 logger.info("Marking printer %s as offline (smart plug power off)", printer_id)
-                client.state.connected = False
-                client.state.state = "unknown"
                 # Trigger the status change callback to broadcast via WebSocket
                 if self._on_status_change:
                     self._schedule_async(self._on_status_change(printer_id, client.state))
@@ -704,13 +722,13 @@ class PrinterManager:
         filename: str,
         plate_id: int = 1,
         ams_mapping: list[int] | None = None,
-        bed_levelling: bool = True,
-        flow_cali: bool = False,
+        bed_levelling: str = "auto",
+        flow_cali: str = "auto",
         vibration_cali: bool = True,
         layer_inspect: bool = False,
         timelapse: bool = False,
         use_ams: bool = True,
-        nozzle_offset_cali: bool = False,
+        nozzle_offset_cali: str = "auto",
         nozzle_mapping: str | None = None,
     ) -> bool:
         """Start a print on a connected printer.
@@ -1052,6 +1070,9 @@ def resolve_expected_tray(
         return None
     if 4 <= raw_slot <= 15:
         return raw_slot
+    # 24-27 = A2L AMS-Lite (normalised unit 6) global tray ids, already resolved.
+    if 24 <= raw_slot <= 27:
+        return raw_slot
     return None
 
 
@@ -1133,6 +1154,13 @@ def printer_state_to_dict(
                         "drying_temp": tray.get("drying_temp"),
                         "drying_time": tray.get("drying_time"),
                         "state": state_val,
+                        # Firmware's authoritative presence bit (tray_exist_bits),
+                        # set by apply_tray_exist_bits. The REST serializer already
+                        # emits it (routes/printers.py); without it here the WS
+                        # shallow-merge drops `exists` after the first frame and
+                        # getEmptySlotKind falls back to the firmware-variant state
+                        # 9/10 heuristic — wrong for AMS-HT in both directions (#2670).
+                        "exists": tray.get("exists"),
                     }
                 )
             # Prefer humidity_raw (actual percentage) over humidity (index 1-5)

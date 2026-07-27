@@ -354,6 +354,9 @@ export default {
     toast: {
       printerDeleted: 'プリンターを削除しました',
       missingSpoolAssignment: '{{printer}}で印刷を開始しました。以下のスプール割り当てがありません: {{slots}}',
+      assignmentVerified: 'スロット{{slot}}にフィラメントを読み込みました（{{printer}}）',
+      assignmentVerifiedNoKprofile: '{{printer}}のスロット{{slot}}を読み込みましたが、フロー校正プロファイル（Kプロファイル）は適用されませんでした',
+      assignmentNotConfirmed: '{{printer}}のスロット{{slot}}の割り当てを確認できませんでした。AMSスロットを確認してください',
       printerAdded: 'プリンターを追加しました',
       printerUpdated: 'プリンターを更新しました',
       failedToDelete: 'プリンターの削除に失敗しました',
@@ -477,6 +480,8 @@ export default {
       skip: 'スキップ',
       confirmTitle: 'オブジェクトをスキップしますか？',
       confirmMessage: '「{{name}}」をスキップしますか？この操作は元に戻せません。',
+      confirmAllMessage: '残りのオブジェクトがすべて選択されています。印刷ジョブは停止します。続行しますか？',
+      confirmMultipleMessage: '選択した{{count}}個のオブジェクトをスキップしますか？この操作は元に戻せません。',
     },
     // Confirm modals
     confirm: {
@@ -1199,6 +1204,8 @@ export default {
     history: {
       emptyTitle: '履歴はまだありません',
       emptyDescription: '完了・キャンセル・失敗した印刷がここに表示されます。',
+      showMore: 'さらに表示',
+      showingCount: '{{total}} 件中 {{shown}} 件を表示',
     },
     dragGhost: {
       multiCount: '{{count}}件',
@@ -2113,6 +2120,9 @@ export default {
     preheatOverride_inherit: '継承',
     preheatOverride_on: 'オン',
     preheatOverride_off: 'オフ',
+    calibrationMode_off: 'オフ',
+    calibrationMode_on: 'オン',
+    calibrationMode_auto: '自動',
     preheatTargetOverride: 'チャンバー目標を上書き (°C、空欄でフィラメント既定値)',
     plateClear: 'プレートクリア確認',
     requirePlateClear: 'プレートクリア確認を必須にする',
@@ -3649,6 +3659,9 @@ export default {
     prints: '印刷回数',
     ascending: '昇順',
     descending: '降順',
+    showModified: '更新日時を表示',
+    hideModified: '更新日時を非表示',
+    lastModified: '最終更新',
     resultsCount: '{{total}}件中{{showing}}件',
     selectAll: 'すべて選択',
     deselectAll: 'すべて選択解除',
@@ -5319,6 +5332,8 @@ export default {
     autoOffDescription: '印刷完了時にオフにする（ワンショット）',
     autoOffPersistent: '有効のまま維持',
     autoOffPersistentDescription: 'ワンショットではなく印刷間で有効のまま維持',
+    controlsPrinterPower: 'プリンターに給電',
+    controlsPrinterPowerDescription: 'このプラグがアクセサリー（フィルターファン、照明）のみに給電する場合はオフにします。オンのままだと、電源を切ったときにプリンターがオフラインとして扱われます。',
     autoOffAfterDrying: '乾燥完了後に自動オフ',
     autoOffAfterDryingDescription: 'AMSの乾燥が完了したらオフにする',
     delayAfterDryingMinutes: '乾燥後の遅延（分）',

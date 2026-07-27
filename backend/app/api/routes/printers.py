@@ -1054,7 +1054,8 @@ async def get_printer_cover(
     """Get the cover image for the current print job.
 
     Args:
-        view: Optional view type. Use "top" for top-down build plate view (useful for skip objects).
+        view: Optional view type. Use "top" for the top-down build plate view or
+              "pick" for the slicer's object-ID mask used by skip objects.
               Default returns angled 3D perspective view.
     """
     # Fetch the printer in a short-lived session and release the pooled DB
@@ -1297,7 +1298,14 @@ async def _produce_cover_image(
             # Try common thumbnail paths in 3MF files
             # Use plate_num to get the correct plate's thumbnail for multi-plate projects
             # Use top-down view if requested (better for skip objects modal)
-            if view == "top":
+            if view == "pick":
+                # Only the active plate's mask, with no fallback: every other view
+                # falls back to plate 1 because a slightly wrong picture is better
+                # than none, but a mask is coordinates, not decoration. Plate 1's
+                # mask over plate 3's layout would resolve clicks to whichever
+                # object happened to occupy that pixel on a different plate.
+                thumbnail_paths = [f"Metadata/pick_{plate_num}.png"]
+            elif view == "top":
                 thumbnail_paths = [
                     f"Metadata/top_{plate_num}.png",
                     # Fall back to plate 1 if specific plate not found
@@ -1328,14 +1336,21 @@ async def _produce_cover_image(
                 except KeyError:
                     continue
 
-            # If no specific thumbnail found, try any PNG in Metadata
-            for name in zf.namelist():
-                if name.startswith("Metadata/") and name.endswith(".png"):
-                    image_data = zf.read(name)
-                    if printer_id not in _cover_cache:
-                        _cover_cache[printer_id] = {}
-                    _cover_cache[printer_id][(subtask_name, view_key)] = image_data
-                    return image_data
+            # If no specific thumbnail found, try any PNG in Metadata. Never for
+            # "pick": handing back a rendered thumbnail in place of the object-ID
+            # mask is worse than nothing, because the caller can't tell the
+            # difference and decodes the render's pixel colours as object IDs —
+            # dark pixels yield small integers that collide with real IDs, so a
+            # click would select an arbitrary object and skip it irreversibly.
+            # A 404 is what tells the UI to fall back to the checklist.
+            if view != "pick":
+                for name in zf.namelist():
+                    if name.startswith("Metadata/") and name.endswith(".png"):
+                        image_data = zf.read(name)
+                        if printer_id not in _cover_cache:
+                            _cover_cache[printer_id] = {}
+                        _cover_cache[printer_id][(subtask_name, view_key)] = image_data
+                        return image_data
 
             _cover_404_cache.setdefault(printer_id, set()).add(cache_key)
             raise HTTPException(404, "No thumbnail found in 3MF file")
@@ -2720,6 +2735,17 @@ async def configure_ams_slot(
             except Exception:
                 pass
 
+    # Register a read-back verification (#2582) so the tray telemetry that the
+    # status push below returns can confirm the printer accepted this manual
+    # slot configuration. Mirrors the inventory/assignment path.
+    client.register_assignment_verification(
+        ams_id=ams_id,
+        tray_id=tray_id,
+        tray_info_idx=effective_tray_info_idx,
+        tray_color=tray_color,
+        cali_idx=cali_idx,
+    )
+
     # Request fresh status push from printer so frontend gets updated data via WebSocket
     logger.info("[configure_ams_slot] Requesting status update from printer")
     update_result = client.request_status_update()
@@ -3914,8 +3940,12 @@ async def ams_load(
     - 254: external spool (single-external printers, or Ext-L on dual-nozzle H2D)
     - 255: Ext-R on dual-nozzle H2D
     """
-    if tray_id not in range(16) and tray_id not in (254, 255):
-        raise HTTPException(400, "tray_id must be 0..15 (AMS slot), 254 (external / Ext-L), or 255 (Ext-R)")
+    # 24-27 are the A2L AMS-Lite slots (normalised unit 6 = 6*4+slot); see
+    # a2l-am-unit-16. They are valid global tray ids alongside the regular 0-15.
+    if tray_id not in range(16) and tray_id not in range(24, 28) and tray_id not in (254, 255):
+        raise HTTPException(
+            400, "tray_id must be 0..15 (AMS slot), 24..27 (A2L AMS-Lite), 254 (external / Ext-L), or 255 (Ext-R)"
+        )
 
     result = await db.execute(select(Printer).where(Printer.id == printer_id))
     printer = result.scalar_one_or_none()

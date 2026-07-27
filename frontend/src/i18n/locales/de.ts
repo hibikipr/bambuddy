@@ -355,6 +355,9 @@ export default {
     toast: {
       printerDeleted: 'Drucker gelöscht',
       missingSpoolAssignment: 'Druck gestartet auf {{printer}}. Fehlende Spulenzuordnung für: {{slots}}',
+      assignmentVerified: 'Filament in Slot {{slot}} geladen ({{printer}})',
+      assignmentVerifiedNoKprofile: 'Slot {{slot}} auf {{printer}} geladen, aber das Fluss-Kalibrierungsprofil (K-Profil) wurde nicht übernommen',
+      assignmentNotConfirmed: 'Zuordnung für Slot {{slot}} auf {{printer}} konnte nicht bestätigt werden – bitte den AMS-Slot prüfen',
       printerAdded: 'Drucker hinzugefügt',
       printerUpdated: 'Drucker aktualisiert',
       failedToDelete: 'Drucker konnte nicht gelöscht werden',
@@ -478,6 +481,8 @@ export default {
       skip: 'Überspringen',
       confirmTitle: 'Objekt überspringen?',
       confirmMessage: 'Möchten Sie "{{name}}" wirklich überspringen? Dies kann nicht rückgängig gemacht werden.',
+      confirmAllMessage: 'Alle verbleibenden Objekte sind ausgewählt. Dadurch wird der Druckauftrag beendet. Fortfahren?',
+      confirmMultipleMessage: '{{count}} ausgewählte Objekte überspringen? Dies kann nicht rückgängig gemacht werden.',
     },
     // Confirm modals
     confirm: {
@@ -1200,6 +1205,8 @@ export default {
     history: {
       emptyTitle: 'Noch kein Verlauf',
       emptyDescription: 'Abgeschlossene, abgebrochene und fehlgeschlagene Drucke erscheinen hier.',
+      showMore: 'Mehr anzeigen',
+      showingCount: '{{shown}} von {{total}} werden angezeigt',
     },
     dragGhost: {
       multiCount: '{{count}} Einträge',
@@ -2114,6 +2121,9 @@ export default {
     preheatOverride_inherit: 'Übernehmen',
     preheatOverride_on: 'An',
     preheatOverride_off: 'Aus',
+    calibrationMode_off: 'Aus',
+    calibrationMode_on: 'An',
+    calibrationMode_auto: 'Auto',
     preheatTargetOverride: 'Kammer-Ziel überschreiben (°C, leer = Filament-Standard)',
     plateClear: 'Druckplatte-Bestätigung',
     requirePlateClear: 'Druckplatte-Bestätigung erforderlich',
@@ -3649,6 +3659,9 @@ export default {
     prints: 'Drucke',
     ascending: 'Aufsteigend',
     descending: 'Absteigend',
+    showModified: 'Änderungsdatum anzeigen',
+    hideModified: 'Änderungsdatum ausblenden',
+    lastModified: 'Zuletzt geändert',
     resultsCount: '{{showing}} von {{total}} Dateien',
     selectAll: 'Alle auswählen',
     deselectAll: 'Auswahl aufheben',
@@ -5318,6 +5331,8 @@ export default {
     autoOffDescription: 'Ausschalten wenn Druck abgeschlossen (einmalig)',
     autoOffPersistent: 'Aktiviert lassen',
     autoOffPersistentDescription: 'Zwischen Drucken aktiviert bleiben statt einmalig',
+    controlsPrinterPower: 'Versorgt den Drucker',
+    controlsPrinterPowerDescription: 'Deaktivieren, wenn diese Steckdose nur Zubehör versorgt (Filterlüfter, Licht). Sonst wird der Drucker beim Ausschalten als offline markiert.',
     autoOffAfterDrying: 'Automatisch aus nach Trocknung',
     autoOffAfterDryingDescription: 'Ausschalten, wenn AMS-Trocknung abgeschlossen ist',
     delayAfterDryingMinutes: 'Verzögerung nach Trocknung (Minuten)',

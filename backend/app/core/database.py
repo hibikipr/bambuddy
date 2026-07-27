@@ -1443,6 +1443,63 @@ async def run_migrations(conn):
     else:
         await _safe_execute(conn, "ALTER TABLE print_queue ADD COLUMN nozzle_offset_cali BOOLEAN DEFAULT TRUE")
 
+    # Migration: convert bed_levelling / flow_cali / nozzle_offset_cali from
+    # boolean to tri-state strings (off/on/auto). BambuStudio exposes a third
+    # "auto" state for these (skip the calibration if it was done recently); our
+    # booleans could only send force-on / off. Legacy rows map true->'on',
+    # false->'off'; the new default is 'auto'. Idempotent on both dialects:
+    # SQLite leans on column affinity (a BOOLEAN-declared column stores text
+    # fine) and only rewrites rows still holding 0/1; PostgreSQL alters the
+    # column type only while it is still boolean, so re-runs and fresh
+    # create_all() schemas (already VARCHAR) are skipped. Column names are
+    # hardcoded constants, not user input.
+    _tristate_cols = ("bed_levelling", "flow_cali", "nozzle_offset_cali")
+    if is_sqlite():
+        for _col in _tristate_cols:
+            async with conn.begin_nested():
+                # B608 is a false positive here: _col is a hardcoded constant
+                # from _tristate_cols, never user input, and SQL identifiers
+                # can't be bound as parameters. Suppressed inline below.
+                await conn.execute(
+                    text(f"UPDATE print_queue SET {_col} = 'on' WHERE {_col} IN (1, '1', 'true', 'True')")  # nosec B608
+                )
+                await conn.execute(
+                    text(f"UPDATE print_queue SET {_col} = 'off' WHERE {_col} IN (0, '0', 'false', 'False')")  # nosec B608
+                )
+    else:
+        for _col in _tristate_cols:
+            result = await conn.execute(
+                text(
+                    "SELECT data_type FROM information_schema.columns "
+                    "WHERE table_name = 'print_queue' AND column_name = :col"
+                ),
+                {"col": _col},
+            )
+            row = result.fetchone()
+            if row and row[0] == "boolean":
+                await _safe_execute(conn, f"ALTER TABLE print_queue ALTER COLUMN {_col} DROP DEFAULT")
+                await _safe_execute(
+                    conn,
+                    f"ALTER TABLE print_queue ALTER COLUMN {_col} TYPE VARCHAR(8) "
+                    f"USING (CASE WHEN {_col} THEN 'on' ELSE 'off' END)",
+                )
+                await _safe_execute(conn, f"ALTER TABLE print_queue ALTER COLUMN {_col} SET DEFAULT 'auto'")
+
+    # Migration: normalise the workflow-default settings rows that back these
+    # options from legacy "true"/"false" to the tri-state vocabulary so the API
+    # returns real values (the AppSettings validator also coerces on read, but
+    # rewriting keeps the stored data honest). Only these three became tri-state.
+    for _skey in ("default_bed_levelling", "default_flow_cali", "default_nozzle_offset_cali"):
+        async with conn.begin_nested():
+            await conn.execute(
+                text("UPDATE settings SET value = 'on' WHERE key = :k AND lower(value) IN ('true', '1')"),
+                {"k": _skey},
+            )
+            await conn.execute(
+                text("UPDATE settings SET value = 'off' WHERE key = :k AND lower(value) IN ('false', '0')"),
+                {"k": _skey},
+            )
+
     # Migration: Per-item preheat / heat-soak override (#1468). preheat_override
     # is one of {inherit, on, off} — 'inherit' falls back to the global
     # preheat_enabled setting; 'on' / 'off' force the decision. The chamber
@@ -3697,6 +3754,35 @@ async def run_migrations(conn):
     # whole-file filament instead of the printed plate's (#2614). Runs AFTER the
     # #2603 archive plate_id backfill above so print_archives.plate_id is populated.
     await _migrate_scope_run_filament_to_plate(conn)
+
+    # Migration: Add controls_printer_power to smart_plugs (#2629). Marks
+    # whether a plug actually feeds the printer's own power — only then may an
+    # auto-off mark the printer offline. Defaults to true so existing plugs
+    # keep the previous behaviour; accessory plugs (filter fan, lights) are
+    # opted out by the user. BOOLEAN literals differ per dialect (SQLite has
+    # no true/false keyword), so the default is dialect-branched.
+    if is_sqlite():
+        await _safe_execute(conn, "ALTER TABLE smart_plugs ADD COLUMN controls_printer_power BOOLEAN DEFAULT 1")
+    else:
+        await _safe_execute(
+            conn,
+            "ALTER TABLE smart_plugs ADD COLUMN IF NOT EXISTS controls_printer_power BOOLEAN DEFAULT true",
+        )
+
+    # Migration: real filesystem mtime for library files/folders (#2680). The
+    # folder tree's "sort by recent activity" and the file pane's date sort must
+    # track the on-disk mtime (``ls -t``), not Bambuddy's DB ``updated_at`` — for
+    # a bulk external scan every row's ``updated_at`` is the same scan instant, so
+    # ordering was arbitrary. Nullable; the timestamp type differs by dialect
+    # (SQLite DATETIME vs Postgres TIMESTAMP) so an existing-DB upgrade doesn't hit
+    # "type datetime does not exist" on Postgres. On a fresh DB create_all() already
+    # built the column, so the ALTER is swallowed as "already exists".
+    if is_sqlite():
+        await _safe_execute(conn, "ALTER TABLE library_files ADD COLUMN fs_modified_at DATETIME")
+        await _safe_execute(conn, "ALTER TABLE library_folders ADD COLUMN fs_modified_at DATETIME")
+    else:
+        await _safe_execute(conn, "ALTER TABLE library_files ADD COLUMN fs_modified_at TIMESTAMP")
+        await _safe_execute(conn, "ALTER TABLE library_folders ADD COLUMN fs_modified_at TIMESTAMP")
 
     # Migration: Disambiguate the four ``user_print_*`` notification template
     # names by appending " Email" (#1792). See ``_migrate_rename_user_print_template_names``.

@@ -355,6 +355,9 @@ export default {
     toast: {
       printerDeleted: '印表機已刪除',
       missingSpoolAssignment: '已在{{printer}}上開始列印。以下料槽未分配耗材: {{slots}}',
+      assignmentVerified: '耗材已載入料槽{{slot}}（{{printer}}）',
+      assignmentVerifiedNoKprofile: '{{printer}}的料槽{{slot}}已載入，但流量校準設定檔（K設定檔）未套用',
+      assignmentNotConfirmed: '無法確認{{printer}}上料槽{{slot}}的分配，請檢查AMS料槽',
       printerAdded: '印表機已新增',
       printerUpdated: '印表機已更新',
       failedToDelete: '刪除印表機失敗',
@@ -478,6 +481,8 @@ export default {
       skip: '跳過',
       confirmTitle: '跳過物件？',
       confirmMessage: '確定要跳過"{{name}}"嗎？此操作無法復原。',
+      confirmAllMessage: '已選取所有剩餘物件。這將停止列印工作。是否繼續？',
+      confirmMultipleMessage: '跳過選取的 {{count}} 個物件？此操作無法復原。',
     },
     // Confirm modals
     confirm: {
@@ -1200,6 +1205,8 @@ export default {
     history: {
       emptyTitle: '目前沒有歷史記錄',
       emptyDescription: '已完成、已取消與失敗的列印將顯示於此。',
+      showMore: '顯示更多',
+      showingCount: '顯示 {{total}} 項中的 {{shown}} 項',
     },
     dragGhost: {
       multiCount: '{{count}} 項',
@@ -2115,6 +2122,9 @@ export default {
     preheatOverride_inherit: '繼承',
     preheatOverride_on: '開啟',
     preheatOverride_off: '關閉',
+    calibrationMode_off: '關閉',
+    calibrationMode_on: '開啟',
+    calibrationMode_auto: '自動',
     preheatTargetOverride: '覆寫腔體目標 (°C，留空使用耗材預設)',
     plateClear: '熱床清空確認',
     requirePlateClear: '需要熱床清空確認',
@@ -3637,6 +3647,9 @@ export default {
     prints: '列印',
     ascending: '升序',
     descending: '降序',
+    showModified: '顯示修改日期',
+    hideModified: '隱藏修改日期',
+    lastModified: '最後修改',
     resultsCount: '{{showing}} / {{total}} 個檔案',
     selectAll: '全選',
     deselectAll: '取消全選',
@@ -5307,6 +5320,8 @@ export default {
     autoOffDescription: '列印完成時關閉（一次性）',
     autoOffPersistent: '保持啟用',
     autoOffPersistentDescription: '在列印之間保持啟用而非一次性',
+    controlsPrinterPower: '為印表機供電',
+    controlsPrinterPowerDescription: '若此插座僅為配件（濾網風扇、燈光）供電，請關閉此選項；否則關閉插座會將印表機標記為離線。',
     autoOffAfterDrying: '乾燥完成後自動關閉',
     autoOffAfterDryingDescription: 'AMS 乾燥完成後關閉',
     delayAfterDryingMinutes: '乾燥後延遲（分鐘）',
