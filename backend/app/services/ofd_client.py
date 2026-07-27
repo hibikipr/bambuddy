@@ -37,6 +37,11 @@ logger = logging.getLogger(__name__)
 OFD_ALL_URL = "https://api.openfilamentdatabase.org/json/all.json"
 OFD_TTL_SECONDS = 24 * 3600
 
+# Generous cap against a malicious/broken upstream serving an oversized or
+# infinite response — the real dump is a small fraction of this. Mirrors the
+# same guard already on the SpoolmanDB-Community client's tarball download.
+_MAX_ALL_JSON_BYTES = 128 * 1024 * 1024
+
 # Bump whenever the on-disk cache shape changes, so an old cache file (e.g.
 # pre-dating article_number/variant-code support) is treated as stale and
 # rebuilt instead of being misread.
@@ -218,9 +223,18 @@ def _load_stale_cached() -> tuple[dict, dict, dict, list] | None:
 async def _refresh() -> tuple[dict, dict, dict, list]:
     """Download all.json; build the indexes + brand-name list; cache all of it."""
     async with httpx.AsyncClient(timeout=60.0) as client:
-        resp = await client.get(OFD_ALL_URL)
-        resp.raise_for_status()
-        all_json = resp.json()
+        chunks = bytearray()
+        # Streamed with a running size cap rather than client.get(...).json() —
+        # the latter buffers the whole response with no ceiling, so a large or
+        # slow upstream response (malicious or just broken) could OOM the
+        # backend on the 24h auto-refresh.
+        async with client.stream("GET", OFD_ALL_URL) as resp:
+            resp.raise_for_status()
+            async for chunk in resp.aiter_bytes():
+                chunks.extend(chunk)
+                if len(chunks) > _MAX_ALL_JSON_BYTES:
+                    raise ValueError(f"OFD all.json exceeded {_MAX_ALL_JSON_BYTES} byte cap - aborting download")
+        all_json = json.loads(bytes(chunks))
     gtin_index, article_index, variant_codes = _build_index(all_json)
     brands = sorted({b["name"] for b in all_json.get("brands", []) if b.get("name")})
     if not gtin_index and not article_index:
