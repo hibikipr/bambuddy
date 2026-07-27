@@ -59,6 +59,8 @@ WORKDIR /app/frontend
 
 # Copy package files and install
 COPY frontend/package*.json ./
+# postinstall runs copy-tesseract-assets.mjs, which npm ci needs present
+COPY frontend/scripts/ ./scripts/
 RUN npm ci
 
 # Copy frontend source

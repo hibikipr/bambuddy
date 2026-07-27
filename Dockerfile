@@ -5,6 +5,8 @@ WORKDIR /app/frontend
 
 # Copy package files first for better caching
 COPY frontend/package*.json ./
+# postinstall runs copy-tesseract-assets.mjs, which npm ci needs present
+COPY frontend/scripts/ ./scripts/
 
 # Use cache mount for npm
 RUN --mount=type=cache,target=/root/.npm \
