@@ -628,6 +628,21 @@ export default {
       chamber: '챔버 팬'
     },
     clickToViewHmsErrors: 'HMS 오류 보기 클릭',
+    aiDetection: {
+      safe: '안전',
+      warning: '경고',
+      failure: '실패',
+      idle: '대기 중',
+      tooltip: 'AI 실패 감지: {{status}} (점수 {{score}}) - 클릭하여 자세히 보기',
+      tooltipIdle: 'AI 실패 감지 활성화됨 - 다음 인쇄부터 모니터링을 시작합니다 - 클릭하여 자세히 보기',
+      modalTitle: 'AI 실패 감지 - {{name}}',
+      currentStatus: '상태',
+      score: '점수',
+      framesAnalyzed: '분석된 프레임',
+      idleHint: '현재 모니터링 중인 인쇄가 없습니다. 다음 인쇄부터 자동으로 모니터링을 시작합니다.',
+      lastError: '마지막 오류',
+      openSettings: '설정 열기'
+    },
     estimatedCompletion: '예상 완료 시간',
     plateNumber: '플레이트 {{number}}',
     slotOptions: '슬롯 옵션',
@@ -1398,6 +1413,7 @@ export default {
     periodCost: '기간 비용',
     avgPerPrint: '인쇄당 평균',
     usageOverTime: '시간별 사용량',
+    energyOverTime: '시간별 에너지 사용량',
     filamentByWeight: '무게',
     printDuration: '인쇄 시간',
     printerUtilization: '프린터 사용률',
@@ -3499,6 +3515,7 @@ export default {
     noPermissionRenameFolder: '폴더 이름 변경 권한이 없습니다',
     noPermissionLinkFolder: '폴더 연결 권한이 없습니다',
     noPermissionDeleteFolder: '폴더 삭제 권한이 없습니다',
+    onlyEmptyFoldersDeletable: '빈 폴더만 삭제할 수 있습니다',
     noPermissionPrint: '인쇄 권한이 없습니다',
     noPermissionAddToQueue: '대기열 추가 권한이 없습니다',
     noPermissionSlice: '파일 슬라이싱 권한이 없습니다',
@@ -3585,6 +3602,9 @@ export default {
     targetParts: '목표 부품',
     targetPartsPlaceholder: '예: 150',
     targetPartsHelp: '필요한 총 개체 수',
+    targetSets: '파일당 복사본 수',
+    targetSetsPlaceholder: '예: 10',
+    targetSetsHelp: '각 인쇄 가능한 파일을 인쇄할 횟수',
     tagsLabel: '태그 (쉼표로 구분)',
     tagsPlaceholder: '예: voron, 기능성, 선물',
     dueDate: '마감일',
@@ -3653,6 +3673,9 @@ export default {
     progress: {
       platesProgress: '플레이트 진행률',
       partsProgress: '부품 진행률',
+      setsProgress: '완성된 세트',
+      sets: '세트',
+      setsHint: '모든 인쇄 가능한 파일이 이 횟수에 도달하면 세트가 완성됩니다',
       printJobs: '인쇄 작업',
       parts: '부품',
       percentComplete: '{{percent}}% 완료',
@@ -3691,6 +3714,8 @@ export default {
       forQuickAccess: '빠른 접근을 위해 이 프로젝트에 연결합니다.',
       fileCount: '{{count}}개 파일',
       empty: '연결된 폴더가 없습니다. 파일 관리자로 이동하여 폴더를 이 프로젝트에 연결하세요.',
+      printedCount: '{{count}}회 인쇄됨',
+      progressTooltip: '{{target}}회 중 {{done}}회 인쇄 완료',
       noFiles: '이 폴더에 파일이 없습니다.'
     },
     bom: {
@@ -5190,7 +5215,8 @@ export default {
       email: '이메일',
       discord: 'Discord',
       webhook: 'Webhook',
-      homeassistant: 'Home Assistant'
+      homeassistant: 'Home Assistant',
+      bark: 'Bark'
     },
     providerDescriptions: {
       email: 'SMTP 이메일 알림',
@@ -5200,7 +5226,8 @@ export default {
       pushover: '간단하고 신뢰할 수 있는 푸시 알림',
       callmebot: 'CallMeBot을 통한 무료 WhatsApp 알림',
       webhook: '모든 URL에 일반 HTTP POST',
-      homeassistant: 'Home Assistant 대시보드의 지속적인 알림'
+      homeassistant: 'Home Assistant 대시보드의 지속적인 알림',
+      bark: 'Bark를 통한 iOS 푸시 알림(셀프 호스팅 가능)'
     },
     lastSuccess: '마지막: {{date}}',
     error: '오류',
@@ -5323,6 +5350,7 @@ export default {
     add: '추가',
     nameRequired: '이름이 필요합니다',
     fieldRequired: '{{field}}이(가) 필요합니다',
+    haDataInvalid: 'Data 필드는 유효한 JSON 객체여야 합니다(예: {"priority": "high", "ttl": 0})',
     phoneNumber: '전화번호',
     apiKey: 'API 키',
     serverUrl: '서버 URL',

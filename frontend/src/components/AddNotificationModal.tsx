@@ -12,7 +12,7 @@ interface AddNotificationModalProps {
   onClose: () => void;
 }
 
-const PROVIDER_VALUES: ProviderType[] = ['email', 'telegram', 'discord', 'ntfy', 'pushover', 'callmebot', 'webhook', 'homeassistant'];
+const PROVIDER_VALUES: ProviderType[] = ['email', 'telegram', 'discord', 'ntfy', 'pushover', 'bark', 'callmebot', 'webhook', 'homeassistant'];
 
 export function AddNotificationModal({ provider, onClose }: AddNotificationModalProps) {
   const { t } = useTranslation();
@@ -144,6 +144,21 @@ export function AddNotificationModal({ provider, onClose }: AddNotificationModal
       }
     }
 
+    // HA custom service-data must be a JSON object (#1441)
+    if (providerType === 'homeassistant' && config.data?.trim()) {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(config.data);
+      } catch {
+        setError(t('notifications.haDataInvalid'));
+        return;
+      }
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        setError(t('notifications.haDataInvalid'));
+        return;
+      }
+    }
+
     const finalConfig: Record<string, unknown> =
       providerType === 'ntfy' && Object.keys(eventPriorities).length > 0
         ? { ...config, event_priorities: eventPriorities }
@@ -265,6 +280,21 @@ export function AddNotificationModal({ provider, onClose }: AddNotificationModal
       case 'homeassistant':
         return [
           { key: 'service', label: 'Home Assistant Service', placeholder: 'notify.mobile_app_myphone', type: 'text', required: false },
+          { key: 'data', label: 'Data (JSON, optional)', placeholder: '{"priority": "high", "ttl": 0, "channel": "3D Printing"}', type: 'textarea', required: false },
+        ];
+      case 'bark':
+        return [
+          { key: 'device_key', label: 'Device Key', placeholder: 'Your Bark device key', type: 'text', required: true },
+          { key: 'server', label: 'Server URL', placeholder: 'https://api.day.app', type: 'text', required: false },
+          { key: 'group', label: 'Group', placeholder: 'Bambuddy', type: 'text', required: false },
+          { key: 'sound', label: 'Sound', placeholder: 'minuet', type: 'text', required: false },
+          { key: 'level', label: 'Interruption Level', type: 'select', required: false, options: [
+            { value: '', label: 'Default' },
+            { value: 'active', label: 'Active' },
+            { value: 'timeSensitive', label: 'Time Sensitive' },
+            { value: 'critical', label: 'Critical (bypasses Silent/Focus)' },
+            { value: 'passive', label: 'Passive (no sound)' },
+          ]},
         ];
       default:
         return [];
@@ -368,6 +398,17 @@ export function AddNotificationModal({ provider, onClose }: AddNotificationModal
                       </option>
                     ))}
                   </select>
+                ) : field.type === 'textarea' ? (
+                  <textarea
+                    value={config[field.key] || ''}
+                    onChange={(e) => {
+                      setConfig({ ...config, [field.key]: e.target.value });
+                      setTestResult(null);
+                    }}
+                    placeholder={field.placeholder}
+                    rows={3}
+                    className="w-full px-3 py-2 bg-bambu-dark border border-bambu-dark-tertiary rounded-lg text-white focus:border-bambu-green focus:outline-none font-mono text-sm"
+                  />
                 ) : (
                   <input
                     type={field.type}

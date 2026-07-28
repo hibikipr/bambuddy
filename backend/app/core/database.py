@@ -3804,6 +3804,17 @@ async def run_migrations(conn):
     # (new model, not an ALTER), so this only needs to backfill rows.
     await _migrate_backfill_spool_codes(conn)
 
+    # Migration: per-file print progress inside a project (#1897).
+    # - print_archives.library_file_id: which library file a queued run was
+    #   dispatched from; nullable, no FK constraint added to existing tables
+    #   (SQLite can't ADD CONSTRAINT; the application uses SET NULL semantics
+    #   via the ORM on fresh installs and tolerates dangling ids by matching
+    #   hash/filename as fallback anyway).
+    # - projects.target_sets: optional copies-per-file target. INTEGER is
+    #   spelled identically on SQLite and Postgres — no dialect branch.
+    await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN library_file_id INTEGER")
+    await _safe_execute(conn, "ALTER TABLE projects ADD COLUMN target_sets INTEGER")
+
 
 async def _migrate_backfill_spool_codes(conn) -> None:
     """Backfill spool_code from every Spool.barcode set before this feature shipped.
