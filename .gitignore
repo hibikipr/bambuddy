@@ -33,6 +33,11 @@ frontend/public/tesseract/*.wasm
 frontend/public/tesseract/*.gz
 npm-debug.log*
 
+# Generated at Docker build time by
+# backend/scripts/seed_spoolmandb_community_cache.py - a ~15MB downloaded
+# snapshot that doesn't belong in git history.
+backend/app/services/spoolmandb_community_seed.json
+
 # Database
 *.db
 *.db-journal

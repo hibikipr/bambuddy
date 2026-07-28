@@ -62,6 +62,14 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy backend
 COPY backend/ ./backend/
 
+# Bake a build-time SpoolmanDB-Community snapshot into the image, so a
+# brand-new self-hosted/air-gapped deployment has barcode coverage from
+# first boot instead of an empty cache with nothing to fall back to (see
+# spoolmandb_community_client.py's `_load_seed_cache` and the script's own
+# docstring). Never fails the build - a network hiccup here just means the
+# image ships without a seed, same as before this existed.
+RUN python -m backend.scripts.seed_spoolmandb_community_cache || true
+
 # Capture the current git branch at build time. `.git/HEAD` is the only
 # .git metadata the build context lets through (see .dockerignore); it
 # contains `ref: refs/heads/<branch>`, which the SpoolBuddy remote-update
