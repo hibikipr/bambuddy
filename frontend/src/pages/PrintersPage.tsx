@@ -3678,18 +3678,55 @@ function PrinterCard({
                     ? 'bg-status-warning'
                     : 'bg-bambu-green';
 
+                const hasCompactEta = isActiveCompactPrint && status.remaining_time != null && status.remaining_time > 0;
+                const hasCompactLayers =
+                  isActiveCompactPrint &&
+                  status.layer_num != null &&
+                  status.total_layers != null &&
+                  status.total_layers > 0;
+
                 return (
-                  <div className="relative mt-2 flex items-center gap-2">
-                    <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-bambu-dark-tertiary">
-                      <div
-                        className={`${compactProgressClass} h-1.5 rounded-full transition-all`}
-                        style={{ width: `${compactProgress}%` }}
-                      />
+                  <>
+                    <div className="relative mt-2 flex items-center gap-2">
+                      <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-bambu-dark-tertiary">
+                        <div
+                          className={`${compactProgressClass} h-1.5 rounded-full transition-all`}
+                          style={{ width: `${compactProgress}%` }}
+                        />
+                      </div>
+                      <span className={`w-9 shrink-0 text-right text-[11px] leading-none ${isActiveCompactPrint ? 'text-white' : 'text-bambu-gray'}`}>
+                        {isActiveCompactPrint ? `${Math.round(compactProgress)}%` : '---%'}
+                      </span>
                     </div>
-                    <span className={`w-9 shrink-0 text-right text-[11px] leading-none ${isActiveCompactPrint ? 'text-white' : 'text-bambu-gray'}`}>
-                      {isActiveCompactPrint ? `${Math.round(compactProgress)}%` : '---%'}
-                    </span>
-                  </div>
+                    {/* #2674: size S showed only a name, a pip and a progress bar — not
+                        enough to answer "which printer finishes first", which is what a
+                        wall-mounted fleet view is for. One line of the metrics the
+                        expanded card already renders, using the same formatters and the
+                        same ETA styling so S and M read alike. The row keeps its height
+                        when idle so cards don't shift as prints start and stop. */}
+                    <div className="mt-1 flex min-h-[14px] items-center gap-2 overflow-hidden text-[11px] leading-none text-bambu-gray">
+                      {hasCompactEta && (
+                        <>
+                          <span className="flex shrink-0 items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {formatDuration(status.remaining_time! * 60)}
+                          </span>
+                          <span
+                            className="shrink-0 font-medium text-bambu-green"
+                            title={t('printers.estimatedCompletion')}
+                          >
+                            ETA {formatETA(status.remaining_time!, timeFormat, t)}
+                          </span>
+                        </>
+                      )}
+                      {hasCompactLayers && (
+                        <span className="flex min-w-0 items-center gap-1 truncate">
+                          <Layers className="w-3 h-3 shrink-0" />
+                          {status.layer_num}/{status.total_layers}
+                        </span>
+                      )}
+                    </div>
+                  </>
                 );
               })()
             ) : (

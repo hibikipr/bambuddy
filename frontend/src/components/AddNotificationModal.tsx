@@ -43,6 +43,7 @@ export function AddNotificationModal({ provider, onClose }: AddNotificationModal
   const [onMaintenanceDue, setOnMaintenanceDue] = useState(provider?.on_maintenance_due ?? false);
   const [onStockReorderAlert, setOnStockReorderAlert] = useState(provider?.on_stock_reorder_alert ?? false);
   const [onStockBreakAlert, setOnStockBreakAlert] = useState(provider?.on_stock_break_alert ?? false);
+  const [onPlateClearRequired, setOnPlateClearRequired] = useState(provider?.on_plate_clear_required ?? false);
   const [onBedCooled, setOnBedCooled] = useState(provider?.on_bed_cooled ?? false);
   const [onFirstLayerComplete, setOnFirstLayerComplete] = useState(provider?.on_first_layer_complete ?? false);
 
@@ -188,6 +189,7 @@ export function AddNotificationModal({ provider, onClose }: AddNotificationModal
       on_maintenance_due: onMaintenanceDue,
       on_stock_reorder_alert: onStockReorderAlert,
       on_stock_break_alert: onStockBreakAlert,
+      on_plate_clear_required: onPlateClearRequired,
       on_bed_cooled: onBedCooled,
       on_first_layer_complete: onFirstLayerComplete,
     };
@@ -581,6 +583,13 @@ export function AddNotificationModal({ provider, onClose }: AddNotificationModal
                 </div>
                 <div className="flex items-center justify-between col-span-2">
                   <div>
+                    <span className="text-sm text-white">{t('notifications.plateClearRequired')}</span>
+                    <span className="text-xs text-bambu-gray ml-1">{t('notifications.plateClearRequiredDescription')}</span>
+                  </div>
+                  <Toggle checked={onPlateClearRequired} onChange={setOnPlateClearRequired} />
+                </div>
+                <div className="flex items-center justify-between col-span-2">
+                  <div>
                     <span className="text-sm text-white">{t('notifications.bedCooled')}</span>
                     <span className="text-xs text-bambu-gray ml-1">{t('notifications.bedCooledAfterPrint')}</span>
                   </div>
@@ -652,6 +661,7 @@ export function AddNotificationModal({ provider, onClose }: AddNotificationModal
               if (onPrintFailed) enabledEvents.push({ key: 'on_print_failed', label: t('notifications.failed') });
               if (onPrintStopped) enabledEvents.push({ key: 'on_print_stopped', label: t('notifications.stopped') });
               if (onPrintProgress) enabledEvents.push({ key: 'on_print_progress', label: t('notifications.progress') });
+              if (onPlateClearRequired) enabledEvents.push({ key: 'on_plate_clear_required', label: t('notifications.plateClearRequired') });
               if (onBedCooled) enabledEvents.push({ key: 'on_bed_cooled', label: t('notifications.bedCooled') });
               if (onFirstLayerComplete) enabledEvents.push({ key: 'on_first_layer_complete', label: t('notifications.firstLayerCompleteLabel') });
               if (onPrinterOffline) enabledEvents.push({ key: 'on_printer_offline', label: t('notifications.offline') });

@@ -29,6 +29,7 @@ from backend.app.schemas.archive import ArchiveResponse, ArchiveSlim, ArchiveSta
 from backend.app.schemas.print_log import PrintLogResponse
 from backend.app.schemas.slicer import SliceRequest
 from backend.app.services.archive import ArchiveService
+from backend.app.services.design_settings import overrides_from_config
 from backend.app.utils.http import build_content_disposition
 from backend.app.utils.safe_path import safe_join_under
 from backend.app.utils.threemf_tools import (
@@ -40,6 +41,9 @@ from backend.app.utils.threemf_tools import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/archives", tags=["archives"])
+
+# Path of the embedded slicer config inside a BambuStudio/OrcaSlicer 3MF.
+_PROJECT_SETTINGS_PATH = "Metadata/project_settings.config"
 
 
 def _safe_filename(filename: str) -> str:
@@ -3461,11 +3465,23 @@ async def get_archive_plates(
     # Printer / process preset names the 3MF was prepared with — used by the
     # SliceModal to default its dropdowns (#1325).
     embedded_presets: dict[str, str | None] = {"printer": None, "process": None}
+    # Process settings the designer changed away from the stock preset (#2622),
+    # offered in the SliceModal for a cross-printer re-slice. Same payload the
+    # library plates endpoint returns — SliceModal reads one shape for both.
+    design_overrides: list[dict] = []
 
     try:
         with zipfile.ZipFile(file_path, "r") as zf:
             namelist = zf.namelist()
             embedded_presets = extract_embedded_presets_from_3mf(zf)
+            if _PROJECT_SETTINGS_PATH in namelist:
+                try:
+                    design_overrides = [
+                        o._asdict()
+                        for o in overrides_from_config(json.loads(zf.read(_PROJECT_SETTINGS_PATH).decode("utf-8")))
+                    ]
+                except (ValueError, OSError, KeyError):
+                    design_overrides = []
 
             # Find all plate gcode files to determine available plates
             gcode_files = [n for n in namelist if n.startswith("Metadata/plate_") and n.endswith(".gcode")]
@@ -3727,6 +3743,7 @@ async def get_archive_plates(
         "has_gcode": has_gcode,
         "embedded_printer": embedded_presets["printer"],
         "embedded_process": embedded_presets["process"],
+        "design_overrides": design_overrides,
     }
 
 

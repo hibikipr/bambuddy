@@ -64,6 +64,11 @@ from backend.app.schemas.library import (
 )
 from backend.app.schemas.slicer import SliceRequest, SliceResponse
 from backend.app.services.archive import ThreeMFParser
+from backend.app.services.design_settings import (
+    apply_design_overrides,
+    extract_design_process_overrides,
+    overrides_from_config,
+)
 from backend.app.services.plate_thumbnail import inject_plate_thumbnails_if_missing
 from backend.app.services.stl_thumbnail import MIN_USABLE_STL_BYTES, generate_stl_thumbnail
 from backend.app.utils.filename import InvalidFilenameError, validate_print_filename
@@ -76,6 +81,9 @@ from backend.app.utils.threemf_tools import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/library", tags=["library"])
+
+# Path of the embedded slicer config inside a BambuStudio/OrcaSlicer 3MF.
+_PROJECT_SETTINGS_PATH = "Metadata/project_settings.config"
 
 
 def _ensure_library_file_visible(
@@ -2774,11 +2782,23 @@ async def get_library_file_plates(
     # SliceModal to default its dropdowns (#1325). Initialised here so the
     # final return never raises NameError when the file isn't a valid zip.
     embedded_presets: dict[str, str | None] = {"printer": None, "process": None}
+    # Process settings the designer changed away from the stock preset (#2622).
+    # Offered in the SliceModal so a cross-printer re-slice can carry them
+    # instead of silently losing them to the picked process profile.
+    design_overrides: list[dict] = []
 
     try:
         with zipfile.ZipFile(file_path, "r") as zf:
             namelist = zf.namelist()
             embedded_presets = extract_embedded_presets_from_3mf(zf)
+            if _PROJECT_SETTINGS_PATH in namelist:
+                try:
+                    design_overrides = [
+                        o._asdict()
+                        for o in overrides_from_config(json.loads(zf.read(_PROJECT_SETTINGS_PATH).decode("utf-8")))
+                    ]
+                except (ValueError, OSError, KeyError):
+                    design_overrides = []
 
             # Find all plate gcode files to determine available plates
             gcode_files = [n for n in namelist if n.startswith("Metadata/plate_") and n.endswith(".gcode")]
@@ -3007,6 +3027,7 @@ async def get_library_file_plates(
         "is_multi_plate": len(plates) > 1,
         "embedded_printer": embedded_presets["printer"],
         "embedded_process": embedded_presets["process"],
+        "design_overrides": design_overrides,
     }
 
 
@@ -3656,6 +3677,21 @@ async def _run_slicer_with_fallback(
         # assignments get discarded and the slice comes out single-material
         # with a PVA slot loaded but never used.
         presets["process"] = _patch_process_support_settings(presets["process"], primary_bytes)
+
+        # #2622: carry the designer's own process tweaks onto the picked preset.
+        # BambuStudio records exactly which keys deviate from the system preset
+        # in `different_settings_to_system`, so a MakerWorld author's 5 walls /
+        # 100% infill / 0.1mm first layer survive a re-slice for another printer
+        # instead of being flattened by --load-settings. Opt-in per key: only the
+        # keys the caller names are applied, and only if the source really lists
+        # them as changed. Runs after the #1881 support patch so an explicit
+        # design pick wins over the blanket support carry-over.
+        if request.design_overrides:
+            presets["process"] = apply_design_overrides(
+                presets["process"],
+                extract_design_process_overrides(primary_bytes),
+                request.design_overrides,
+            )
 
     used_embedded_settings = False
     # "Slice as designed" (#2611): honour the file's embedded

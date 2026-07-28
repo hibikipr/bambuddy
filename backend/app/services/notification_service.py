@@ -1381,6 +1381,39 @@ class NotificationService:
             variables=variables,
         )
 
+    async def on_plate_clear_required(
+        self,
+        printer_id: int,
+        printer_name: str,
+        db: AsyncSession,
+    ):
+        """Handle plate-clear-required event — a print ended and the queue is gated (#2525).
+
+        Distinct from ``on_plate_not_empty``, which is the camera check *before* a
+        print starts. This one fires on the rising edge of the Bambuddy-side
+        awaiting-plate-clear flag, i.e. whenever a print reaches a terminal state
+        and the next queued job can't dispatch until someone confirms the bed is
+        free. Off by default on every provider: it lands at the same moment as the
+        print-complete notification, so opting in is a deliberate choice.
+        """
+        providers = await self._get_providers_for_event(db, "on_plate_clear_required", printer_id)
+        if not providers:
+            return
+
+        variables = {"printer": printer_name}
+
+        title, message = await self._build_message_from_template(db, "plate_clear_required", variables)
+        await self._send_to_providers(
+            providers,
+            title,
+            message,
+            db,
+            "plate_clear_required",
+            printer_id,
+            printer_name,
+            variables=variables,
+        )
+
     async def on_filament_low(
         self,
         printer_id: int,

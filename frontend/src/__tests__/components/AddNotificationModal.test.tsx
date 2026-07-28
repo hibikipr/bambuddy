@@ -48,6 +48,7 @@ function buildProvider(overrides: Partial<NotificationProvider> = {}): Notificat
     on_ams_ht_humidity_high: false,
     on_ams_ht_temperature_high: false,
     on_plate_not_empty: true,
+    on_plate_clear_required: false,
     on_bed_cooled: false,
     on_first_layer_complete: false,
     on_queue_job_added: false,
@@ -220,6 +221,76 @@ describe('AddNotificationModal — ntfy Priority (#990)', () => {
     const payload = captured as { provider_type: string; config: Record<string, unknown> };
     expect(payload.provider_type).toBe('email');
     expect(payload.config).not.toHaveProperty('event_priorities');
+  });
+});
+
+describe('AddNotificationModal — plate clear required (#2525)', () => {
+  it('renders the toggle off by default', async () => {
+    render(<AddNotificationModal provider={buildProvider()} onClose={() => undefined} />);
+
+    await screen.findByDisplayValue('My ntfy');
+
+    const toggle = screen
+      .getAllByRole('switch')
+      .find((s) => s.closest('div')?.textContent?.match(/plate clear required/i));
+    expect(toggle).toBeDefined();
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('pre-fills the toggle from the existing provider value', async () => {
+    render(
+      <AddNotificationModal
+        provider={buildProvider({ on_plate_clear_required: true })}
+        onClose={() => undefined}
+      />,
+    );
+
+    await screen.findByDisplayValue('My ntfy');
+
+    const toggle = screen
+      .getAllByRole('switch')
+      .find((s) => s.closest('div')?.textContent?.match(/plate clear required/i))!;
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('persists on_plate_clear_required on save', async () => {
+    let captured: unknown = null;
+    server.use(
+      http.patch('*/api/v1/notifications/1', async ({ request }) => {
+        captured = await request.json();
+        return HttpResponse.json({ id: 1 });
+      }),
+    );
+
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<AddNotificationModal provider={buildProvider()} onClose={onClose} />);
+
+    await screen.findByDisplayValue('My ntfy');
+
+    const toggle = screen
+      .getAllByRole('switch')
+      .find((s) => s.closest('div')?.textContent?.match(/plate clear required/i))!;
+    await user.click(toggle);
+
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+
+    const payload = captured as Record<string, unknown>;
+    expect(payload.on_plate_clear_required).toBe(true);
+  });
+
+  it('lists the event in the ntfy priority section once enabled', async () => {
+    render(
+      <AddNotificationModal
+        provider={buildProvider({ on_plate_clear_required: true })}
+        onClose={() => undefined}
+      />,
+    );
+
+    const sectionHeader = await screen.findByText(/ntfy priority/i);
+    const sectionRoot = sectionHeader.closest('div')!;
+    expect(within(sectionRoot).getByText(/plate clear required/i)).toBeInTheDocument();
   });
 });
 

@@ -398,6 +398,20 @@ const RU_COGNATES = [
   '(25%, 50%, 75%)',
 ];
 
+// Ukrainian keeps only Latin brand names and placeholder/punctuation-only
+// formats verbatim; every prose string in uk.ts is translated.
+const UK_COGNATES = [
+  'MakerWorld: {{designer}}',                         // brand + placeholder
+  '{{printer}}: {{error}}',                           // pure placeholders
+  'Bambu Cloud', 'Orca Cloud',                        // brand names — same in every locale
+  'Sport (124%)', 'Ludicrous (166%)',                 // official Bambu speed-mode names
+  'email',                                            // OIDC claim name placeholder
+  '{{name}} — {{stage}} ({{percent}}%) — {{elapsed}}',
+  'EC984C,#6CD4BC,A66EB9,D87694',
+  '({{count}}/8)',
+  '(25%, 50%, 75%)',
+];
+
 const IDENTICAL_TO_EN_ALLOWED = {
   de: new Set(DE_COGNATES),
   fr: new Set(FR_COGNATES),
@@ -410,6 +424,7 @@ const IDENTICAL_TO_EN_ALLOWED = {
   'zh-TW': new Set(ZH_TW_COGNATES),
   tr: new Set(TR_COGNATES),
   ru: new Set(RU_COGNATES),
+  uk: new Set(UK_COGNATES),
 };
 
 // Pure comparison logic, exported so tests can verify each failure mode

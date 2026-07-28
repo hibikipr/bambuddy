@@ -3815,6 +3815,18 @@ async def run_migrations(conn):
     await _safe_execute(conn, "ALTER TABLE print_archives ADD COLUMN library_file_id INTEGER")
     await _safe_execute(conn, "ALTER TABLE projects ADD COLUMN target_sets INTEGER")
 
+    # Migration: plate-clear-required notification opt-in (#2525). Off by
+    # default — it fires after every print, at the same moment as the
+    # print-complete alert. Postgres rejects `DEFAULT 0` for BOOLEAN.
+    if is_sqlite():
+        await _safe_execute(
+            conn, "ALTER TABLE notification_providers ADD COLUMN on_plate_clear_required BOOLEAN DEFAULT 0"
+        )
+    else:
+        await _safe_execute(
+            conn, "ALTER TABLE notification_providers ADD COLUMN on_plate_clear_required BOOLEAN DEFAULT false"
+        )
+
 
 async def _migrate_backfill_spool_codes(conn) -> None:
     """Backfill spool_code from every Spool.barcode set before this feature shipped.
