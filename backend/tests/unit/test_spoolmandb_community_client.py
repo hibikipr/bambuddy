@@ -184,6 +184,24 @@ class TestAllCodesFor:
         codes = smdb._all_codes_for(v)
         assert codes == [{"code": "REAL-SKU", "kind": "sku", "is_refill": False}]
 
+    def test_eans_as_plain_string_is_ignored_not_iterated_char_by_char(self):
+        """Covers the review finding: eans/eans_refill/codes are each expected
+        to be a list, but iterating a plain string (a malformed upstream
+        source file shipping "eans": "123..." instead of a list) yields its
+        individual characters - each single-char string passes the inner
+        isinstance(barcode, str) guard, so one-character garbage codes would
+        get indexed unless the container itself is also type-checked."""
+        v = {"eans": "6975337031345", "eans_refill": [], "codes": []}
+        assert smdb._all_codes_for(v) == []
+
+    def test_eans_refill_as_plain_string_is_ignored(self):
+        v = {"eans": [], "eans_refill": "6975337035053", "codes": []}
+        assert smdb._all_codes_for(v) == []
+
+    def test_codes_as_plain_string_is_ignored(self):
+        v = {"eans": [], "eans_refill": [], "codes": "ALZMNTABS01"}
+        assert smdb._all_codes_for(v) == []
+
 
 class TestBuildIndex:
     def test_indexes_eans_and_eans_refill_in_gtin_index(self):

@@ -264,7 +264,13 @@ async def _download_and_parse_variants() -> list[dict]:
 def _all_codes_for(variant: dict) -> list[dict]:
     """Every GTIN/SKU sibling for one color: eans + eans_refill + codes (SKUs)."""
     codes: list[dict] = []
-    for barcode in variant.get("eans", []):
+    eans = variant.get("eans")
+    # eans/eans_refill/codes are each expected to be a list of strings, but an
+    # upstream source file could ship any of them as a plain string instead -
+    # iterating a str yields its individual characters, which would otherwise
+    # pass the isinstance(barcode, str) check below and index one-character
+    # garbage codes into the lookup table.
+    for barcode in eans if isinstance(eans, list) else []:
         # canon() assumes a string (re.sub raises TypeError on anything else) -
         # guarded the same way the SKU loop below already is. A single
         # malformed upstream source file with a numeric EAN would otherwise
@@ -272,11 +278,13 @@ def _all_codes_for(variant: dict) -> list[dict]:
         if not isinstance(barcode, str) or not barcode.strip():
             continue
         codes.append({"code": canon(barcode), "kind": "gtin", "is_refill": False})
-    for barcode in variant.get("eans_refill", []):
+    eans_refill = variant.get("eans_refill")
+    for barcode in eans_refill if isinstance(eans_refill, list) else []:
         if not isinstance(barcode, str) or not barcode.strip():
             continue
         codes.append({"code": canon(barcode), "kind": "gtin", "is_refill": True})
-    for sku in variant.get("codes", []):
+    skus = variant.get("codes")
+    for sku in skus if isinstance(skus, list) else []:
         if not isinstance(sku, str) or not sku.strip():
             continue
         codes.append({"code": sku.strip().upper(), "kind": "sku", "is_refill": False})
