@@ -183,6 +183,9 @@ class TestCachingAndLookup:
         monkeypatch.setattr(ofd_client, "_brands", None)
         monkeypatch.setattr(ofd_client, "_index_loaded_at", 0.0)
         monkeypatch.setattr(ofd_client, "_cache_path", lambda: tmp_path / "ofd_cache.json")
+        # Isolate from whatever seed file (if any) happens to exist on the
+        # real filesystem - e.g. from a dev running the seed script locally.
+        monkeypatch.setattr(ofd_client, "_seed_cache_path", lambda: tmp_path / "ofd_seed.json")
         yield
 
     def _write_cache(self, tmp_path, gtin_index, article_index, variant_codes, brands, built_at=None, version=None):
@@ -255,8 +258,72 @@ class TestCachingAndLookup:
 
     @pytest.mark.asyncio
     async def test_refresh_failure_with_no_cache_at_all_raises(self, tmp_path):
-        """No stale fallback exists (first-ever startup, no network) — the
-        caller must still learn the lookup couldn't be attempted."""
+        """No stale fallback and no build-time seed exists either (first-ever
+        startup, no network, image built without a seed) — the caller must
+        still learn the lookup couldn't be attempted."""
+        with (
+            patch(
+                "backend.app.services.ofd_client._refresh",
+                new=AsyncMock(side_effect=RuntimeError("offline")),
+            ),
+            pytest.raises(RuntimeError),
+        ):
+            await ofd_client.get_gtin_index()
+
+    def _write_seed(self, tmp_path, gtin_index, article_index, variant_codes, brands, version=None):
+        seed_file = tmp_path / "ofd_seed.json"
+        seed_file.write_text(
+            json.dumps(
+                {
+                    "cache_version": ofd_client._CACHE_VERSION if version is None else version,
+                    "built_at": time.time(),
+                    "gtin_index": gtin_index,
+                    "article_index": article_index,
+                    "variant_codes": variant_codes,
+                    "brands": brands,
+                }
+            )
+        )
+
+    @pytest.mark.asyncio
+    async def test_refresh_failure_with_no_disk_cache_falls_back_to_seed(self, tmp_path):
+        """Covers the review finding: a brand-new, never-online deployment
+        has nothing in DATA_DIR to fall back to - the build-time seed baked
+        into the image (backend/scripts/seed_ofd_cache.py) is the last
+        resort before giving up entirely."""
+        gtin_index, article_index, variant_codes = ofd_client._build_index(SAMPLE_ALL_JSON)
+        self._write_seed(tmp_path, gtin_index, article_index, variant_codes, ["Sunlu"])
+
+        with patch(
+            "backend.app.services.ofd_client._refresh",
+            new=AsyncMock(side_effect=RuntimeError("offline")),
+        ):
+            result = await ofd_client.get_gtin_index()
+        assert ofd_client.canon("06938936716785") in result
+
+    @pytest.mark.asyncio
+    async def test_seed_fallback_persists_into_data_dir_cache(self, tmp_path):
+        """Once the seed is used, it's written into DATA_DIR so a later boot
+        reads it as a normal stale cache instead of re-reading the seed file
+        every time, and the usual TTL-based refresh cycle takes over."""
+        gtin_index, article_index, variant_codes = ofd_client._build_index(SAMPLE_ALL_JSON)
+        self._write_seed(tmp_path, gtin_index, article_index, variant_codes, ["Sunlu"])
+
+        with patch(
+            "backend.app.services.ofd_client._refresh",
+            new=AsyncMock(side_effect=RuntimeError("offline")),
+        ):
+            await ofd_client.get_gtin_index()
+
+        assert (tmp_path / "ofd_cache.json").exists()
+
+    @pytest.mark.asyncio
+    async def test_seed_with_wrong_cache_version_is_ignored(self, tmp_path):
+        """A seed baked by an older code version (pre-dating a cache shape
+        change) must not be misread, same as the DATA_DIR cache's own
+        version check."""
+        self._write_seed(tmp_path, {}, {}, {}, [], version=1)
+
         with (
             patch(
                 "backend.app.services.ofd_client._refresh",

@@ -70,6 +70,11 @@ COPY backend/ ./backend/
 # image ships without a seed, same as before this existed.
 RUN python -m backend.scripts.seed_spoolmandb_community_cache || true
 
+# Same for OFD (see ofd_client.py's `_load_seed_cache` and the script's own
+# docstring) - both community filament databases are MIT-licensed, data
+# included, so bundling a snapshot of either is clean.
+RUN python -m backend.scripts.seed_ofd_cache || true
+
 # Capture the current git branch at build time. `.git/HEAD` is the only
 # .git metadata the build context lets through (see .dockerignore); it
 # contains `ref: refs/heads/<branch>`, which the SpoolBuddy remote-update

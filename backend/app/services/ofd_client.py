@@ -60,6 +60,14 @@ def _cache_path() -> Path:
     return resolve_data_dir() / "ofd_cache.json"
 
 
+def _seed_cache_path() -> Path:
+    """Path to the build-time seed snapshot baked into the image itself
+    (not the DATA_DIR volume) — see `backend/scripts/seed_ofd_cache.py` and
+    its own module docstring for why this exists and how it's produced.
+    """
+    return Path(__file__).parent / "ofd_seed.json"
+
+
 def canon(barcode: str) -> str:
     """Canonical GTIN form for matching: digits only, leading zeros stripped.
 
@@ -220,8 +228,52 @@ def _load_stale_cached() -> tuple[dict, dict, dict, list] | None:
     return None if data is None else _cache_tuple(data)
 
 
-async def _refresh() -> tuple[dict, dict, dict, list]:
-    """Download all.json; build the indexes + brand-name list; cache all of it."""
+def _load_seed_cache() -> tuple[dict, dict, dict, list] | None:
+    """Return the build-time seed snapshot baked into the image, or None if
+    missing/corrupt/wrong-version. Last-resort fallback for a brand-new,
+    never-online deployment: the DATA_DIR volume is empty (no stale cache to
+    fall back to) and the network refresh just failed, so this is the only
+    thing standing between "no coverage at all" and some (build-time-stale)
+    coverage. See `backend/scripts/seed_ofd_cache.py`.
+    """
+    path = _seed_cache_path()
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+        if data.get("cache_version") != _CACHE_VERSION:
+            return None
+        return _cache_tuple(data)
+    except Exception:
+        return None
+
+
+def _write_cache_file(
+    gtin_index: dict, article_index: dict, variant_codes: dict, brands: list, built_at: float
+) -> None:
+    """Atomically write the DATA_DIR cache file (temp file + rename, so a
+    reader never observes a half-written file even if the process is killed
+    mid-write)."""
+    path = _cache_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(
+        json.dumps(
+            {
+                "cache_version": _CACHE_VERSION,
+                "built_at": built_at,
+                "gtin_index": gtin_index,
+                "article_index": article_index,
+                "variant_codes": variant_codes,
+                "brands": brands,
+            }
+        )
+    )
+    tmp_path.replace(path)
+
+
+async def _download_all_json() -> dict:
+    """Download and parse OFD's all.json dump, with a running size cap."""
     async with httpx.AsyncClient(timeout=60.0) as client:
         chunks = bytearray()
         # Streamed with a running size cap rather than client.get(...).json() —
@@ -234,7 +286,12 @@ async def _refresh() -> tuple[dict, dict, dict, list]:
                 chunks.extend(chunk)
                 if len(chunks) > _MAX_ALL_JSON_BYTES:
                     raise ValueError(f"OFD all.json exceeded {_MAX_ALL_JSON_BYTES} byte cap - aborting download")
-        all_json = json.loads(bytes(chunks))
+        return json.loads(bytes(chunks))
+
+
+async def _refresh() -> tuple[dict, dict, dict, list]:
+    """Download all.json; build the indexes + brand-name list; cache all of it."""
+    all_json = await _download_all_json()
     gtin_index, article_index, variant_codes = _build_index(all_json)
     brands = sorted({b["name"] for b in all_json.get("brands", []) if b.get("name")})
     if not gtin_index and not article_index:
@@ -245,26 +302,7 @@ async def _refresh() -> tuple[dict, dict, dict, list]:
         # failure, so raising here reuses that fallback instead of caching this.
         raise RuntimeError("OFD refresh parsed zero entries - keeping previous cache")
     try:
-        path = _cache_path()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        # Write to a temp file and rename over the real path — Path.replace()
-        # is atomic (POSIX rename(2) semantics, and Windows-safe since it
-        # replaces an existing destination too), so a reader never observes a
-        # half-written cache file even if the process is killed mid-write.
-        tmp_path = path.with_suffix(path.suffix + ".tmp")
-        tmp_path.write_text(
-            json.dumps(
-                {
-                    "cache_version": _CACHE_VERSION,
-                    "built_at": time.time(),
-                    "gtin_index": gtin_index,
-                    "article_index": article_index,
-                    "variant_codes": variant_codes,
-                    "brands": brands,
-                }
-            )
-        )
-        tmp_path.replace(path)
+        _write_cache_file(gtin_index, article_index, variant_codes, brands, time.time())
     except Exception:
         logger.warning("Failed to write OFD cache file", exc_info=True)
     return gtin_index, article_index, variant_codes, brands
@@ -290,9 +328,25 @@ async def _ensure_loaded(force: bool = False) -> None:
                 # network) — that's the one case where the caller must know
                 # the lookup couldn't be attempted at all.
                 loaded = _load_stale_cached()
-                if loaded is None:
-                    raise
-                logger.warning("OFD refresh failed; serving stale disk cache instead", exc_info=True)
+                if loaded is not None:
+                    logger.warning("OFD refresh failed; serving stale disk cache instead", exc_info=True)
+                else:
+                    # Nothing in DATA_DIR either - a brand-new, never-online
+                    # deployment. Fall back to the build-time seed snapshot
+                    # (if the image was built with one) rather than leaving
+                    # every lookup with zero coverage forever.
+                    loaded = _load_seed_cache()
+                    if loaded is None:
+                        raise
+                    logger.warning("OFD offline with no disk cache; serving build-time seed instead")
+                    # Persist it into DATA_DIR so future boots read it as a
+                    # normal stale cache instead of re-reading the seed file
+                    # every time, and so the next successful online refresh
+                    # naturally replaces it via the usual TTL path.
+                    try:
+                        _write_cache_file(*loaded, built_at=time.time())
+                    except Exception:
+                        logger.warning("Failed to persist seed cache into DATA_DIR", exc_info=True)
         _gtin_index, _article_index, _variant_codes, _brands = loaded
         _index_loaded_at = time.time()
 

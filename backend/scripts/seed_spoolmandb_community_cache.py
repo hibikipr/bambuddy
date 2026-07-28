@@ -22,10 +22,8 @@ existed (no SpoolmanDB-Community coverage until the first successful
 online refresh) - strictly an enhancement, not a hard requirement.
 
 SpoolmanDB-Community is MIT-licensed (Icezaza2543/SpoolmanDB-Community),
-so redistributing a snapshot inside the image is clean. OFD is
-deliberately NOT seeded this way - its redistribution terms aren't clear,
-and its own try/except fallback already handles running without any cache
-cleanly (see `ofd_client.py`).
+so redistributing a snapshot inside the image is clean. See
+`seed_ofd_cache.py` for the equivalent OFD seed.
 """
 
 from __future__ import annotations
