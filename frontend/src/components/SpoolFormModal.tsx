@@ -415,8 +415,6 @@ export function SpoolFormModal({
         setFormData({ ...defaultFormData, ...initialData });
         setPresetInputValue('');
         setSelectedProfiles(new Set());
-        setQuickAdd(true);
-        setQuantity(1);
       } else {
         setFormData(defaultFormData);
         setPresetInputValue('');
@@ -426,8 +424,11 @@ export function SpoolFormModal({
       // its state while closed, and the Quick Add toggle only renders in create
       // mode — so quick-adding a spool and then opening Edit left the edit form
       // stuck in quick-add layout (no preset field, no PA-profile tab) with no
-      // control to switch back.
-      setQuickAdd(false);
+      // control to switch back. Scanned-spool prefills are the one case that
+      // should default it on instead — done here, not in the branch above, so
+      // this unconditional reset doesn't clobber it (both used to run in the
+      // same effect and only the last setQuickAdd call took effect).
+      setQuickAdd(!spool && !!initialData);
       setQuantity(1);
       setErrors({});
       setActiveTab('filament');

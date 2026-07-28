@@ -1270,6 +1270,41 @@ describe('SpoolFormModal scan-to-add prefill', () => {
     expect(payload).toHaveProperty('barcode', '6938936716785');
   });
 
+  it('still resets quick-add off when reopened for Edit right after a scan prefill (#1905)', async () => {
+    // Regression guard: the #1905 fix (reset quickAdd on every open so a prior
+    // quick-add create doesn't leak into Edit) and this scan-to-add default
+    // both live in the same effect — a naive fix for one can silently undo
+    // the other since only the last setQuickAdd call in the effect sticks.
+    const { rerender } = render(
+      <SpoolFormModal
+        isOpen={true}
+        onClose={vi.fn()}
+        mode="create"
+        currencySymbol="$"
+        initialData={{ material: 'PETG' }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Quantity')).toBeInTheDocument();
+    });
+
+    rerender(
+      <SpoolFormModal
+        isOpen={true}
+        onClose={vi.fn()}
+        mode="edit"
+        currencySymbol="$"
+        spool={existingSpool}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Edit Spool')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Quantity')).not.toBeInTheDocument();
+  });
+
   it('omits data_origin and sends a null barcode for a normal manual create', async () => {
     render(
       <SpoolFormModal
