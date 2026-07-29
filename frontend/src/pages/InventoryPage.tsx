@@ -1355,7 +1355,11 @@ function InventoryPage({ spoolmanMode = false, spoolmanModeReady = true }: { spo
           </h1>
           <p className="text-bambu-gray mt-1">{t('inventory.subtitle')}</p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* grid-cols-3 below sm gives two full rows of three labeled buttons
+            instead of the six icons cramming/wrapping unpredictably into a
+            single flex row with hidden labels; sm: and up reverts to the
+            original single-row flex layout, unchanged from before. */}
+        <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:flex-wrap">
           {/* CSV import/export (#1576). Operates on Bambuddy's local inventory.
               In Spoolman mode the buttons stay visible (feature parity) but are
               disabled with a hint pointing at Spoolman's own CSV export, since
@@ -1365,22 +1369,24 @@ function InventoryPage({ spoolmanMode = false, spoolmanModeReady = true }: { spo
             disabled={spoolmanMode}
             onClick={() => setCsvImportOpen(true)}
             title={spoolmanCsvHint ?? t('inventory.csv.importButton', 'Import CSV')}
+            className="w-full sm:w-auto"
           >
             <Upload className="w-4 h-4" />
-            <span className="hidden sm:inline">{t('inventory.csv.importButton', 'Import CSV')}</span>
+            <span>{t('inventory.csv.importButton', 'Import CSV')}</span>
           </Button>
           <Button
             variant="secondary"
             disabled={spoolmanMode || exportingCsv}
             onClick={handleExportCsv}
             title={spoolmanCsvHint ?? t('inventory.csv.exportButton', 'Export CSV')}
+            className="w-full sm:w-auto"
           >
             {exportingCsv ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-            <span className="hidden sm:inline">{t('inventory.csv.exportButton', 'Export CSV')}</span>
+            <span>{t('inventory.csv.exportButton', 'Export CSV')}</span>
           </Button>
-          <Button variant="secondary" onClick={() => setLocationsModalOpen(true)} title={t('locations.manage')}>
+          <Button variant="secondary" onClick={() => setLocationsModalOpen(true)} title={t('locations.manage')} className="w-full sm:w-auto">
             <MapPin className="w-4 h-4" />
-            <span className="hidden sm:inline">{t('locations.manage')}</span>
+            <span>{t('locations.manage')}</span>
           </Button>
           <Button
             variant="secondary"
@@ -1394,17 +1400,18 @@ function InventoryPage({ spoolmanMode = false, spoolmanModeReady = true }: { spo
                 ? t('inventory.labels.noSpoolsTitle', 'No spools to label')
                 : t('inventory.labels.bulkTitle', 'Pick spools to print labels for from the {{count}} currently shown', { count: filteredSpools.length })
             }
+            className="w-full sm:w-auto"
           >
             <Printer className="w-4 h-4" />
-            <span className="hidden sm:inline">{t('inventory.labels.printLabels', 'Print labels…')}</span>
+            <span>{t('inventory.labels.printLabels', 'Print labels…')}</span>
           </Button>
-          <Button variant="secondary" onClick={() => setBarcodeScanOpen(true)} title={t('inventory.barcodeScan.scanButton', 'Scan Barcode')}>
+          <Button variant="secondary" onClick={() => setBarcodeScanOpen(true)} title={t('inventory.barcodeScan.scanButton', 'Scan Barcode')} className="w-full sm:w-auto">
             <ScanBarcode className="w-4 h-4" />
-            <span className="hidden sm:inline">{t('inventory.barcodeScan.scanButton', 'Scan Barcode')}</span>
+            <span>{t('inventory.barcodeScan.scanButton', 'Scan Barcode')}</span>
           </Button>
-          <Button onClick={() => setFormModal({ spool: null, mode: 'create' })} title={t('inventory.addSpool')}>
+          <Button onClick={() => setFormModal({ spool: null, mode: 'create' })} title={t('inventory.addSpool')} className="w-full sm:w-auto">
             <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">{t('inventory.addSpool')}</span>
+            <span>{t('inventory.addSpool')}</span>
           </Button>
         </div>
       </div>
