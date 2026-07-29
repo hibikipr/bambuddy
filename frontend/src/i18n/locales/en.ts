@@ -2465,6 +2465,8 @@ export default {
     styleGlow: 'Glow',
     styleVibrant: 'Vibrant',
     themeToggleHint: 'Toggle between dark, light, and system mode using the icon in the sidebar.',
+    progressInTitle: 'Print progress in tab',
+    progressInTitleDescription: 'Show the active print\'s percentage and a progress ring in the browser tab.',
     // Archive
     autoArchivePrints: 'Auto-archive prints',
     autoArchiveDescription: 'Automatically save 3MF files when prints complete',
@@ -5704,6 +5706,9 @@ export default {
     pushoverExpire: 'Emergency Expire (s)',
     botToken: 'Bot Token',
     chatId: 'Chat ID',
+    telegramThreadId: 'Forum Topic ID',
+    telegramThreadIdHelp: 'Optional. Posts into a single topic of a forum group — the last number in the topic link (t.me/c/.../25). Leave empty for the General topic.',
+    telegramThreadIdInvalid: 'Forum Topic ID must be a number.',
     smtpServer: 'SMTP Server',
     smtpPort: 'SMTP Port',
     security: 'Security',

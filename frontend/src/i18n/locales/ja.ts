@@ -2445,6 +2445,8 @@ export default {
     styleGlow: 'グロー',
     styleVibrant: 'ビビッド',
     themeToggleHint: 'サイドバーのアイコンでダーク、ライト、システムモードを切り替えます。',
+    progressInTitle: 'タブに印刷の進捗を表示',
+    progressInTitleDescription: 'ブラウザのタブに進行中の印刷の進捗率と進捗リングを表示します。',
     // Archive
     autoArchivePrints: '印刷を自動アーカイブ',
     autoArchiveDescription: '印刷完了時に3MFファイルを自動保存',
@@ -5661,6 +5663,9 @@ export default {
     pushoverExpire: '緊急有効期限 (秒)',
     botToken: 'ボットトークン',
     chatId: 'チャットID',
+    telegramThreadId: 'フォーラムトピック ID',
+    telegramThreadIdHelp: '任意。フォーラムグループ内の特定のトピックに送信します。トピックリンクの末尾の数字です (t.me/c/.../25)。空欄の場合は General トピックに送信されます。',
+    telegramThreadIdInvalid: 'フォーラムトピック ID は数値で入力してください。',
     smtpServer: 'SMTPサーバー',
     smtpPort: 'SMTPポート',
     security: 'セキュリティ',

@@ -2465,6 +2465,8 @@ export default {
     styleGlow: "Світіння",
     styleVibrant: "Яскравий",
     themeToggleHint: "Перемикайтеся між темним, світлим і системним режимами за допомогою значка на бічній панелі.",
+    progressInTitle: "Прогрес у вкладці",
+    progressInTitleDescription: "Показує відсоток активного друку та кільце прогресу на вкладці браузера.",
     // Archive
     autoArchivePrints: "Автоматично архівувати друки",
     autoArchiveDescription: "Автоматично зберігати файли 3MF після завершення друку",
@@ -5704,6 +5706,9 @@ export default {
     pushoverExpire: "Термін дії екстреного сповіщення (с)",
     botToken: "Токен бота",
     chatId: "Ідентифікатор чату",
+    telegramThreadId: "ID теми форуму",
+    telegramThreadIdHelp: "Необов'язково. Надсилає в конкретну тему форум-групи — останнє число у посиланні на тему (t.me/c/.../25). Залиште порожнім для теми General.",
+    telegramThreadIdInvalid: "ID теми форуму має бути числом.",
     smtpServer: "Сервер SMTP",
     smtpPort: "Порт SMTP",
     security: "Безпека",

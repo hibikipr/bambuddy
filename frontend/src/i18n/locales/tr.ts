@@ -2450,6 +2450,8 @@ export default {
     styleGlow: 'Parıltı',
     styleVibrant: 'Canlı',
     themeToggleHint: 'Kenar çubuğundaki güneş/ay simgesini kullanarak koyu ve açık mod arasında geçiş yapın.',
+    progressInTitle: 'Sekmede baskı ilerlemesi',
+    progressInTitleDescription: 'Tarayıcı sekmesinde etkin baskının yüzdesini ve bir ilerleme halkası gösterir.',
     // Arşiv
     autoArchivePrints: 'Baskıları otomatik arşivle',
     autoArchiveDescription: 'Baskılar tamamlandığında 3MF dosyalarını otomatik olarak kaydet',
@@ -5609,6 +5611,9 @@ export default {
     pushoverExpire: 'Acil sona erme (sn)',
     botToken: 'Bot Belirteci',
     chatId: 'Sohbet ID',
+    telegramThreadId: 'Forum Konu Kimliği',
+    telegramThreadIdHelp: 'İsteğe bağlı. Forum grubundaki tek bir konuya gönderir: konu bağlantısındaki son sayı (t.me/c/.../25). Genel konu için boş bırakın.',
+    telegramThreadIdInvalid: 'Forum konu kimliği bir sayı olmalıdır.',
     smtpServer: 'SMTP Sunucusu',
     smtpPort: 'SMTP Portu',
     security: 'Güvenlik',
