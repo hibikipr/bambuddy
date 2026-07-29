@@ -40,6 +40,20 @@ _AMS_MODULE_PREFIXES = ("ams/", "n3f/", "n3s/")
 # printer_manager.ACTIVE_PRINT_STATES and print_scheduler._ACTIVE_PRINT_STATES.
 _ACTIVE_PRINT_STATES = frozenset({"PREPARE", "SLICING", "RUNNING", "PAUSE"})
 
+# CONNACK reason codes that mean the printer actively refused our credentials,
+# as opposed to being unreachable or busy. Bambu speaks MQTT 3.1.1, whose
+# single-byte CONNACK return codes paho maps onto the v5 reason-code space:
+# return code 4 ("bad user name or password") -> 134, and 5 ("not authorized")
+# -> 135. Both mean the same thing in practice for a Bambu printer: the access
+# code (or, on some firmware, the serial used as the username) is wrong.
+_CONNACK_AUTH_REJECTED = frozenset({134, 135})
+
+# Short, stable slugs recorded on the client and surfaced to the connection
+# diagnostic as a `params.reason` variant. Deliberately not free text — the
+# frontend picks a localized message key off these.
+CONNECT_ERROR_AUTH_REJECTED = "auth_rejected"
+CONNECT_ERROR_REFUSED = "refused"
+
 
 def parse_ams_filament_backup_from_cfg(cfg_raw: object) -> bool | None:
     """Extract AMS Filament Backup state from a Bambu push_status ``print.cfg`` value.
@@ -147,9 +161,11 @@ def apply_tray_exist_bits(
     the HT keeps echoing stale ``tray_type`` and its ``state`` is firmware-variant
     (#2670). Verified against OrcaSlicer ``DevFilaSystem.cpp``
     (``is_exists = tray_exist_bits >> (16 + (ams_id-128))``) and a live H2D
-    capture (HT-A → bit 16). The A2L-Lite (normalised to id 6 upstream) lands at
-    bits 24-27 via the regular ``ams_id * 4`` formula, matching OrcaSlicer's
-    ``AMS_LITE_MIXED`` offset, so it needs no special case here.
+    capture (HT-A → bit 16). The A2L-Lite lands at bits 24-27 via the regular
+    ``ams_id * 4`` formula, matching OrcaSlicer's ``AMS_LITE_MIXED`` offset; the
+    unit id is folded through ``normalize_am_unit_id`` first so callers holding
+    the raw physical id 16 get the same bit base as callers holding the
+    normalised 6 (#2697).
 
     `tray_exist_bits_str` is expected as a hex string (firmware sends it that
     way). Ints are tolerated for defensive symmetry but typically not seen
@@ -192,6 +208,13 @@ def apply_tray_exist_bits(
             continue
         if not isinstance(ams_id, int):
             continue
+        # The A2L AMS-Lite reaches this helper under either id: `_handle_ams_data`
+        # normalises 16 -> 6 before calling, but the VP bridge parses the raw
+        # printer payload itself (`mqtt_bridge._on_printer_raw`) and still holds
+        # the physical 16. Both mean bit base 24, so fold them together here
+        # rather than relying on every caller to normalise first — reading 16 as
+        # 16*4 = bit 64 finds nothing set and wipes every A2L slot (#2697).
+        ams_id = normalize_am_unit_id(ams_id)
         # AMS-HT (n3s, id 128-135): single tray, presence bit at 16+(ams_id-128).
         # Regular AMS (and the A2L-Lite normalised to id 6): ams_id*4 + tray_id.
         # Anything outside those ranges has no known bit layout — don't guess it.
@@ -543,6 +566,58 @@ def get_stage_name(stage: int) -> str:
     return STAGE_NAMES.get(stage, f"Unknown stage ({stage})")
 
 
+# #2547 end-of-print telemetry probe.
+#
+# The finish photo needs a "printing is done, toolhead parked, filament unload
+# not started yet" moment. ``stg_cur=22`` was meant to be that moment (#1721)
+# but fires on no model in the field: across 247 support bundles there is not a
+# single ``FINISH PHOTO MOMENT (stage-22)``, including the 2026-06-13..07-08
+# window where it was the only pre-FINISH trigger in the code (104 captures on
+# A1, A1 Mini, H2C, H2D, P1S, P2S, X1C, X2D — all of them the FINISH fallback).
+#
+# We can't design a replacement from bundles we already have, because out of
+# this window Bambuddy only ever parses ``stg_cur`` and ``mc_print_sub_stage``;
+# every other stage/action field is dropped unread. The obvious candidates
+# (``print_real_action``, ``mc_action``, ``mc_stage``) are also absent from
+# A1/A1 Mini/P1S payloads, so none of them can be the universal answer on its
+# own. Dumping the raw values for the window between the last object layer and
+# ``gcode_state=FINISH`` lets one debug bundle per model settle what — if
+# anything — marks that moment.
+#
+# Every field here is machine telemetry (stage codes, counters, bitfields).
+# Nothing identifying, and nothing that could carry an access code.
+_END_OF_PRINT_PROBE_FIELDS = (
+    "gcode_state",
+    "state",
+    "print_error",
+    "stg_cur",
+    "stg",
+    "stg_cd",
+    "mc_print_stage",
+    "mc_print_sub_stage",
+    "mc_action",
+    "mc_stage",
+    "print_real_action",
+    "print_gcode_action",
+    "spd_lvl",
+    "mc_percent",
+    "mc_remaining_time",
+    "layer_num",
+    "total_layer_num",
+    "home_flag",
+    "prepare_per",
+)
+
+# Frame budget for one print's probe. A long final layer can hold the window
+# open for minutes at ~1 frame/second; this stops a single print from filling
+# the log the user then has to upload.
+_END_OF_PRINT_PROBE_MAX_FRAMES = 400
+
+# States that close the window. FINISH is the interesting one — the probe's
+# whole job is to show what happened in the run-up to it.
+_END_OF_PRINT_PROBE_CLOSING_STATES = frozenset({"FINISH", "FAILED", "IDLE", "PREPARE"})
+
+
 class BambuMQTTClient:
     """MQTT client for Bambu Lab printer communication."""
 
@@ -646,6 +721,12 @@ class BambuMQTTClient:
         # and the FINISH-state fallback don't both fire on the same
         # print. Reset to False on every print start.
         self._finish_photo_captured: bool = False
+        # #2547 end-of-print telemetry probe state. `_armed` is cleared once the
+        # window has run for a print so a late FINISH re-send can't reopen it.
+        self._eop_probe_armed: bool = True
+        self._eop_probe_open: bool = False
+        self._eop_probe_frames: int = 0
+        self._eop_probe_last: dict = {}
         self._last_valid_progress: float = 0.0  # Last non-zero progress (firmware resets on cancel)
         self._last_valid_layer_num: int = 0  # Last non-zero layer (firmware resets on cancel)
         # The subtask_id minted for the most recent start_print() command. The
@@ -712,6 +793,18 @@ class BambuMQTTClient:
         # AMS telemetry. Used to globalise the Lite's local `tray_now` to 24+slot.
         # See normalize_am_unit_id / a2l_lite_wire_ids and memory a2l-am-unit-16.
         self._has_a2l_am_unit: bool = False
+
+        # Why the last connection attempt was refused by the printer, or None
+        # when we have never seen a CONNACK failure since the last success.
+        # Without this a rejected access code was completely invisible: paho
+        # reports the follow-up disconnect as the generic "Unspecified error"
+        # and `_on_connect`'s failure branch used to log nothing at all, so a
+        # printer stuck in a reconnect loop looked identical whether it was
+        # powered off, on the wrong IP, or refusing our credentials (#2698).
+        # One of the CONNECT_ERROR_* slugs; the paired name is the paho reason
+        # string, kept for the log line only.
+        self.last_connect_error: str | None = None
+        self.last_connect_error_name: str | None = None
 
         # Request topic subscription tracking
         # Some printer MQTT brokers (e.g. P1S, A1) reject subscriptions to the request
@@ -963,6 +1056,8 @@ class BambuMQTTClient:
     def _on_connect(self, client, userdata, flags, rc, properties=None):
         if rc == 0:
             self.state.connected = True
+            self.last_connect_error = None
+            self.last_connect_error_name = None
             self._stale_reconnecting = False  # Clear stale-reconnect flag on successful connect
             # A dropped-and-restored MQTT session means the presumed power-off was
             # real (or at least that the printer restarted): there is nothing
@@ -1020,6 +1115,43 @@ class BambuMQTTClient:
                 self.on_state_change(self.state)
         else:
             self.state.connected = False
+            self._record_connect_refusal(rc)
+
+    def _record_connect_refusal(self, rc) -> None:
+        """Log and remember why the printer refused the MQTT connection.
+
+        The failure branch of ``_on_connect`` used to be a bare
+        ``connected = False``, which threw away the only signal that says
+        *why* a printer never comes online. The user-visible result was a
+        30-second reconnect loop logging nothing but paho's generic
+        ``MQTT disconnected: rc=Unspecified error`` — indistinguishable from a
+        powered-off printer, so "my printer won't print" reports could not be
+        triaged without a round trip (#2698).
+
+        Never logs the access code itself; the code is the likely culprit but
+        printing it would put a credential in every support bundle.
+        """
+        code = getattr(rc, "value", rc)
+        name = rc.getName() if hasattr(rc, "getName") else str(rc)
+        self.last_connect_error_name = name
+        if isinstance(code, int) and code in _CONNACK_AUTH_REJECTED:
+            self.last_connect_error = CONNECT_ERROR_AUTH_REJECTED
+            logger.warning(
+                "[%s] MQTT connection refused by the printer: %s (code %s). The access code "
+                "or serial number is wrong — the access code changes every time LAN Only or "
+                "Developer Mode is toggled, so re-read it from the printer's screen.",
+                self.serial_number,
+                name,
+                code,
+            )
+        else:
+            self.last_connect_error = CONNECT_ERROR_REFUSED
+            logger.warning(
+                "[%s] MQTT connection refused by the printer: %s (code %s).",
+                self.serial_number,
+                name,
+                code,
+            )
 
     def _on_subscribe(self, client, userdata, mid, reason_code_list, properties=None):
         """Handle SUBACK responses to detect request topic subscription rejection."""
@@ -1076,7 +1208,21 @@ class BambuMQTTClient:
             )
             return
 
-        logger.warning("[%s] MQTT disconnected: rc=%s, flags=%s", self.serial_number, rc, disconnect_flags)
+        # Carry the last CONNACK refusal into the disconnect line. paho reports
+        # the drop that follows a refused CONNACK as "Unspecified error", so on
+        # its own this line says nothing useful about a printer that is looping
+        # on bad credentials — and this is the line that fills a support bundle
+        # (#2698).
+        if self.last_connect_error:
+            logger.warning(
+                "[%s] MQTT disconnected: rc=%s, flags=%s (last connection attempt was refused: %s)",
+                self.serial_number,
+                rc,
+                disconnect_flags,
+                self.last_connect_error_name,
+            )
+        else:
+            logger.warning("[%s] MQTT disconnected: rc=%s, flags=%s", self.serial_number, rc, disconnect_flags)
 
         # Detect if request topic subscription caused the disconnect.
         # If we just subscribed and got disconnected before any SUBACK confirmation,
@@ -2702,9 +2848,107 @@ class BambuMQTTClient:
             except Exception:
                 logger.exception("[%s] on_assignment_verified callback failed", self.serial_number)
 
+    @staticmethod
+    def _probe_number(value, fallback: float | None = None) -> float | None:
+        """Coerce a telemetry field to a number, or return `fallback`.
+
+        Firmware is inconsistent about whether these arrive as ints or as
+        numeric strings, and the probe must never raise on a surprise type.
+        """
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return fallback
+
+    def _probe_end_of_print(self, data: dict) -> None:
+        """Log raw end-of-print telemetry for one print at DEBUG (#2547).
+
+        Opens on the first frame that looks like end-of-print (last object
+        layer reached, progress at 99+, or no remaining time), then logs each
+        frame in which any probed field changed, and closes on the transition
+        out of RUNNING. Armed once per print — see the module-level comment on
+        ``_END_OF_PRINT_PROBE_FIELDS`` for why this window is the one we can't
+        currently see into.
+
+        Read-only with respect to printer state: this is instrumentation, and
+        nothing downstream may come to depend on it.
+        """
+        if not logger.isEnabledFor(logging.DEBUG):
+            return
+        if not self._eop_probe_open and not (self._eop_probe_armed and self._was_running):
+            return
+
+        present = {k: data[k] for k in _END_OF_PRINT_PROBE_FIELDS if k in data}
+        if not present:
+            return
+
+        if not self._eop_probe_open:
+            # Open on any end-of-print signal. Read from the raw frame first so
+            # the frame that *carries* the signal is itself captured — state
+            # fields are only updated further down this same call.
+            layer = self._probe_number(data.get("layer_num"), self.state.layer_num) or 0
+            total = self._probe_number(data.get("total_layer_num"), self.state.total_layers) or 0
+            percent = self._probe_number(data.get("mc_percent"), self.state.progress) or 0
+            remaining = self._probe_number(data.get("mc_remaining_time"), self.state.remaining_time)
+            at_last_layer = total > 0 and layer >= total
+            # `remaining <= 0` is only meaningful once the print has actually
+            # progressed — it reads 0 during the pre-print calibration too.
+            out_of_time = remaining is not None and remaining <= 0 and percent > 0
+            if not (at_last_layer or percent >= 99 or out_of_time):
+                return
+            self._eop_probe_open = True
+            self._eop_probe_frames = 0
+            self._eop_probe_last = {}
+            logger.debug(
+                "[%s] EOP-PROBE open — layer=%s/%s percent=%s remaining=%s",
+                self.serial_number,
+                layer,
+                total,
+                percent,
+                remaining,
+            )
+
+        closing = str(data.get("gcode_state") or "") in _END_OF_PRINT_PROBE_CLOSING_STATES
+        changed = {k: v for k, v in present.items() if self._eop_probe_last.get(k, object()) != v}
+        self._eop_probe_last.update(present)
+
+        if self._eop_probe_frames >= _END_OF_PRINT_PROBE_MAX_FRAMES and not closing:
+            if self._eop_probe_frames == _END_OF_PRINT_PROBE_MAX_FRAMES:
+                self._eop_probe_frames += 1
+                logger.debug(
+                    "[%s] EOP-PROBE frame budget (%s) reached — suppressing until FINISH",
+                    self.serial_number,
+                    _END_OF_PRINT_PROBE_MAX_FRAMES,
+                )
+            return
+
+        if changed or closing:
+            self._eop_probe_frames += 1
+            logger.debug(
+                "[%s] EOP-PROBE %s%s: %s",
+                self.serial_number,
+                self._eop_probe_frames,
+                " CLOSE" if closing else "",
+                # `changed` on a closing frame can be empty; fall back to the
+                # full picture so the last line is always self-contained.
+                changed if changed else present,
+            )
+
+        if closing:
+            self._eop_probe_open = False
+            self._eop_probe_armed = False
+            self._eop_probe_last = {}
+
     def _update_state(self, data: dict):
         """Update printer state from message data."""
         _previous_state = self.state.state
+
+        # #2547: instrumentation only — runs before any state mutation so the
+        # frame carrying an end-of-print signal is logged as it arrived.
+        try:
+            self._probe_end_of_print(data)
+        except Exception:  # pragma: no cover - a probe must never break ingest
+            logger.debug("[%s] EOP-PROBE failed", self.serial_number, exc_info=True)
 
         # Update state fields
         if "gcode_state" in data:
@@ -3850,6 +4094,11 @@ class BambuMQTTClient:
             self._completion_triggered = False
             # #1721: rearm the end-of-print finish-photo trigger for the new print
             self._finish_photo_captured = False
+            # #2547: rearm the end-of-print telemetry probe for the new print
+            self._eop_probe_armed = True
+            self._eop_probe_open = False
+            self._eop_probe_frames = 0
+            self._eop_probe_last = {}
             # Reset last valid progress/layer for usage tracking
             self._last_valid_progress = 0.0
             self._last_valid_layer_num = 0

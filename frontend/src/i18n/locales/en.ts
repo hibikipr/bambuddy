@@ -6442,7 +6442,8 @@ export default {
       mqtt_auth: {
         title: 'Printer credentials',
         pass: 'The printer accepted the connection.',
-        fail: 'The printer is reachable but rejected the connection. The access code or serial number is most likely wrong. The access code changes every time Developer Mode is toggled — re-copy it from the printer screen.',
+        fail: 'The printer is reachable but Bambuddy is not connected to it. The access code or serial number is most likely wrong — the access code changes every time LAN Only or Developer Mode is toggled, so re-copy it from the printer screen. A printer that is rebooting, or already at its limit of simultaneous connections, can look the same.',
+        fail_auth_rejected: 'The printer refused Bambuddy\'s credentials. The access code or serial number is wrong — the access code changes every time LAN Only or Developer Mode is toggled, so re-copy it from the printer screen and save it in the printer settings.',
         skip: 'Not checked — the printer could not be reached.',
       },
       developer_mode: {

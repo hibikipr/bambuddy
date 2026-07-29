@@ -6387,7 +6387,8 @@ export default {
       mqtt_auth: {
         title: 'Credenziali stampante',
         pass: 'La stampante ha accettato la connessione.',
-        fail: 'La stampante è raggiungibile ma ha rifiutato la connessione. Il codice di accesso o il numero di serie è molto probabilmente errato. Il codice di accesso cambia ogni volta che la modalità sviluppatore viene attivata/disattivata — ricopialo dallo schermo della stampante.',
+        fail: 'La stampante è raggiungibile ma Bambuddy non è connesso ad essa. Il codice di accesso o il numero di serie è molto probabilmente errato — il codice di accesso cambia ogni volta che la modalità Solo LAN o la modalità sviluppatore viene attivata/disattivata, quindi ricopialo dallo schermo della stampante. Una stampante in fase di riavvio, o che ha già raggiunto il limite di connessioni simultanee, appare allo stesso modo.',
+        fail_auth_rejected: 'La stampante ha rifiutato le credenziali di Bambuddy. Il codice di accesso o il numero di serie è errato — il codice di accesso cambia ogni volta che la modalità Solo LAN o la modalità sviluppatore viene attivata/disattivata. Ricopialo dallo schermo della stampante e salvalo nelle impostazioni della stampante.',
         skip: 'Non verificato — impossibile raggiungere la stampante.',
       },
       developer_mode: {

@@ -6388,7 +6388,8 @@ export default {
       mqtt_auth: {
         title: 'Identifiants de l\'imprimante',
         pass: 'L\'imprimante a accepté la connexion.',
-        fail: 'L\'imprimante est accessible mais a refusé la connexion. Le code d\'accès ou le numéro de série est très probablement incorrect. Le code d\'accès change chaque fois que le mode développeur est activé/désactivé — recopiez-le depuis l\'écran de l\'imprimante.',
+        fail: 'L\'imprimante est accessible mais Bambuddy n\'y est pas connecté. Le code d\'accès ou le numéro de série est très probablement incorrect — le code d\'accès change chaque fois que le mode LAN uniquement ou le mode développeur est activé/désactivé, recopiez-le donc depuis l\'écran de l\'imprimante. Une imprimante en cours de redémarrage, ou ayant déjà atteint sa limite de connexions simultanées, produit le même résultat.',
+        fail_auth_rejected: 'L\'imprimante a refusé les identifiants de Bambuddy. Le code d\'accès ou le numéro de série est incorrect — le code d\'accès change chaque fois que le mode LAN uniquement ou le mode développeur est activé/désactivé. Recopiez-le depuis l\'écran de l\'imprimante et enregistrez-le dans les paramètres de l\'imprimante.',
         skip: 'Non vérifié — l\'imprimante n\'a pas pu être jointe.',
       },
       developer_mode: {

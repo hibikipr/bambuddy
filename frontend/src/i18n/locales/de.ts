@@ -6398,7 +6398,8 @@ export default {
       mqtt_auth: {
         title: 'Drucker-Zugangsdaten',
         pass: 'Der Drucker hat die Verbindung akzeptiert.',
-        fail: 'Der Drucker ist erreichbar, hat die Verbindung aber abgelehnt. Der Zugangscode oder die Seriennummer ist höchstwahrscheinlich falsch. Der Zugangscode ändert sich bei jedem Umschalten des Entwicklermodus — kopieren Sie ihn erneut vom Druckerbildschirm.',
+        fail: 'Der Drucker ist erreichbar, aber Bambuddy ist nicht mit ihm verbunden. Höchstwahrscheinlich ist der Zugangscode oder die Seriennummer falsch — der Zugangscode ändert sich bei jedem Umschalten von „Nur LAN“ oder des Entwicklermodus, kopieren Sie ihn also erneut vom Druckerbildschirm. Ein Drucker, der gerade neu startet oder bereits die maximale Anzahl gleichzeitiger Verbindungen erreicht hat, sieht genauso aus.',
+        fail_auth_rejected: 'Der Drucker hat die Zugangsdaten von Bambuddy abgelehnt. Der Zugangscode oder die Seriennummer ist falsch — der Zugangscode ändert sich bei jedem Umschalten von „Nur LAN“ oder des Entwicklermodus. Kopieren Sie ihn erneut vom Druckerbildschirm und speichern Sie ihn in den Druckereinstellungen.',
         skip: 'Nicht geprüft — der Drucker konnte nicht erreicht werden.',
       },
       developer_mode: {

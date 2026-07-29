@@ -6338,7 +6338,8 @@ export default {
       mqtt_auth: {
         title: 'Yazıcı kimlik bilgileri',
         pass: 'Yazıcı bağlantıyı kabul etti.',
-        fail: 'Yazıcı erişilebilir ancak bağlantıyı reddetti. Büyük olasılıkla erişim kodu veya seri numarası yanlış. Erişim kodu, Geliştirici Modu her açılıp kapatıldığında değişir — yazıcı ekranından yeniden kopyalayın.',
+        fail: 'Yazıcıya erişilebiliyor ancak Bambuddy ona bağlı değil. Büyük olasılıkla erişim kodu veya seri numarası yanlış — erişim kodu, Yalnızca LAN veya Geliştirici Modu her açılıp kapatıldığında değişir, bu yüzden yazıcı ekranından yeniden kopyalayın. Yeniden başlamakta olan veya eşzamanlı bağlantı sınırına ulaşmış bir yazıcı da aynı görünür.',
+        fail_auth_rejected: 'Yazıcı, Bambuddy\'nin kimlik bilgilerini reddetti. Erişim kodu veya seri numarası yanlış — erişim kodu, Yalnızca LAN veya Geliştirici Modu her açılıp kapatıldığında değişir. Yazıcı ekranından yeniden kopyalayın ve yazıcı ayarlarına kaydedin.',
         skip: 'Kontrol edilmedi — yazıcıya erişilemedi.',
       },
       developer_mode: {

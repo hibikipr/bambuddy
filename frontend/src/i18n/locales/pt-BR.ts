@@ -6387,7 +6387,8 @@ export default {
       mqtt_auth: {
         title: 'Credenciais da impressora',
         pass: 'A impressora aceitou a conexão.',
-        fail: 'A impressora está acessível mas recusou a conexão. O código de acesso ou o número de série provavelmente está incorreto. O código de acesso muda toda vez que o Modo Desenvolvedor é alternado — copie-o novamente da tela da impressora.',
+        fail: 'A impressora está acessível mas o Bambuddy não está conectado a ela. O código de acesso ou o número de série provavelmente está incorreto — o código de acesso muda toda vez que o modo Somente LAN ou o Modo Desenvolvedor é alternado, então copie-o novamente da tela da impressora. Uma impressora reiniciando, ou que já atingiu seu limite de conexões simultâneas, aparece do mesmo jeito.',
+        fail_auth_rejected: 'A impressora recusou as credenciais do Bambuddy. O código de acesso ou o número de série está incorreto — o código de acesso muda toda vez que o modo Somente LAN ou o Modo Desenvolvedor é alternado. Copie-o novamente da tela da impressora e salve-o nas configurações da impressora.',
         skip: 'Não verificado — não foi possível alcançar a impressora.',
       },
       developer_mode: {
