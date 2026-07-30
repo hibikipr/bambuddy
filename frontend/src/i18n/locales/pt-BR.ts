@@ -668,6 +668,8 @@ export default {
     fans: {
       partCooling: 'Ventilador de resfriamento da peça',
       auxiliary: 'Ventilador auxiliar',
+      leftAuxiliary: 'Ventilador auxiliar esquerdo',
+      exhaust: 'Exaustão',
       chamber: 'Ventilador da câmara',
     },
     // HMS errors
@@ -3668,6 +3670,7 @@ export default {
     showModified: 'Mostrar datas de modificação',
     hideModified: 'Ocultar datas de modificação',
     lastModified: 'Última modificação',
+    lastActivity: 'Última atividade',
     resultsCount: '{{showing}} de {{total}} arquivos',
     selectAll: 'Selecionar tudo',
     deselectAll: 'Desmarcar tudo',

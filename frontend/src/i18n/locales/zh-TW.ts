@@ -668,6 +668,8 @@ export default {
     fans: {
       partCooling: '零件冷卻風扇',
       auxiliary: '輔助風扇',
+      leftAuxiliary: '左輔助風扇',
+      exhaust: '排氣',
       chamber: '腔室風扇',
     },
     // HMS errors
@@ -3668,6 +3670,7 @@ export default {
     showModified: '顯示修改日期',
     hideModified: '隱藏修改日期',
     lastModified: '最後修改',
+    lastActivity: '最近活動',
     resultsCount: '{{showing}} / {{total}} 個檔案',
     selectAll: '全選',
     deselectAll: '取消全選',

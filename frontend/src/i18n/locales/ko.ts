@@ -625,6 +625,8 @@ export default {
     fans: {
       partCooling: '파트 냉각 팬',
       auxiliary: '보조 팬',
+      leftAuxiliary: '왼쪽 보조 팬',
+      exhaust: '배기',
       chamber: '챔버 팬'
     },
     clickToViewHmsErrors: 'HMS 오류 보기 클릭',
@@ -3492,6 +3494,7 @@ export default {
     showModified: '수정 날짜 표시',
     hideModified: '수정 날짜 숨기기',
     lastModified: '마지막 수정',
+    lastActivity: '마지막 활동',
     resultsCount: '전체 {{total}}개 중 {{showing}}개',
     selectAll: '모두 선택',
     deselectAll: '모두 선택 해제',

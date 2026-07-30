@@ -740,6 +740,51 @@ def register_expected_print(
     )
 
 
+def unregister_expected_print(printer_id: int, filename: str, archive_id: int) -> None:
+    """Undo :func:`register_expected_print` when the print never went out.
+
+    Registration has to happen *before* the MQTT print command, because the
+    printer can report the print before the line after the send executes. So
+    every path that registers and then fails to send — a cancel winning the
+    #1853 CAS race, a ``start_print()`` that returns False, or any exception in
+    between — leaves an expectation for a print that will never arrive.
+
+    The TTL sweep evicts those after two hours, which is far longer than it
+    takes a user to react to a failed dispatch by pressing print again: that
+    reprint would be folded into the *old* archive and take the stale
+    ``ams_mapping`` / ``plate_id`` with it. Hence the explicit inverse.
+
+    Mirrors the sweep's rules, including the one that is easy to get wrong:
+    ``_print_ams_mappings`` / ``_print_plate_ids`` are keyed by archive, not by
+    file, so they may only be dropped once no live key still points at that
+    archive.
+    """
+    keys = [(printer_id, filename)]
+    if filename.endswith(".3mf"):
+        base = filename[:-4]
+        keys.append((printer_id, base))
+        keys.append((printer_id, f"{base}.gcode"))
+
+    removed = False
+    for key in keys:
+        if _expected_prints.pop(key, None) is not None:
+            removed = True
+        _expected_print_creators.pop(key, None)
+        _expected_print_registered_at.pop(key, None)
+
+    if archive_id not in set(_expected_prints.values()):
+        _print_ams_mappings.pop(archive_id, None)
+        _print_plate_ids.pop(archive_id, None)
+
+    if removed:
+        logging.getLogger(__name__).info(
+            "Unregistered expected print: printer=%s, file=%s, archive=%s (print was never sent)",
+            printer_id,
+            filename,
+            archive_id,
+        )
+
+
 def _compute_run_filament_grams(
     status: str,
     archive_filament_used_grams: float | None,
@@ -2172,13 +2217,21 @@ async def _capture_snapshot_for_notification(printer_id: int, printer, logger) -
         # Try external camera first
         if printer.external_camera_enabled and printer.external_camera_url:
             logger.info("[SNAPSHOT] Capturing from external camera for printer %s", printer_id)
+            from backend.app.api.routes.camera import live_frame_for_capture
             from backend.app.services.external_camera import capture_frame
 
-            frame_data = await capture_frame(
-                printer.external_camera_url,
-                printer.external_camera_type or "mjpeg",
-                snapshot_url=printer.external_camera_snapshot_url,
-            )
+            # An external camera allows one reader, so capturing while a viewer
+            # is attached fails (#2707). A None here falls through to the paths
+            # below exactly as a failed capture did.
+            defer, buffered = live_frame_for_capture(printer_id)
+            if defer:
+                frame_data = buffered
+            else:
+                frame_data = await capture_frame(
+                    printer.external_camera_url,
+                    printer.external_camera_type or "mjpeg",
+                    snapshot_url=printer.external_camera_snapshot_url,
+                )
             if frame_data and len(frame_data) <= 2_500_000:
                 logger.info("[SNAPSHOT] External camera frame: %s bytes", len(frame_data))
                 return _apply_camera_rotation(frame_data, printer, logger)
@@ -4337,13 +4390,21 @@ async def on_finish_photo_moment(printer_id: int, data: dict):
                 )
 
         if frame_bytes is None and printer.external_camera_enabled and printer.external_camera_url:
+            from backend.app.api.routes.camera import live_frame_for_capture
             from backend.app.services.external_camera import capture_frame
 
-            frame_bytes = await capture_frame(
-                printer.external_camera_url,
-                printer.external_camera_type or "mjpeg",
-                snapshot_url=printer.external_camera_snapshot_url,
-            )
+            # #2707: this used to collide with the live view and fail, which is
+            # how finish-photo notifications went out with no image attached.
+            # Leaving frame_bytes None keeps the rest of the fallback chain.
+            defer, buffered = live_frame_for_capture(printer_id)
+            if defer:
+                frame_bytes = buffered
+            else:
+                frame_bytes = await capture_frame(
+                    printer.external_camera_url,
+                    printer.external_camera_type or "mjpeg",
+                    snapshot_url=printer.external_camera_snapshot_url,
+                )
             if frame_bytes:
                 logger.info(
                     "[FINISH-PHOTO-MOMENT] captured external-camera frame (%d bytes)",
@@ -5307,13 +5368,21 @@ async def on_print_complete(printer_id: int, data: dict):
             if not photo_filename:
                 if printer.external_camera_enabled and printer.external_camera_url:
                     logger.info("[PHOTO-BG] Using external camera")
+                    from backend.app.api.routes.camera import live_frame_for_capture
                     from backend.app.services.external_camera import capture_frame
 
-                    frame_data = await capture_frame(
-                        printer.external_camera_url,
-                        printer.external_camera_type or "mjpeg",
-                        snapshot_url=printer.external_camera_snapshot_url,
-                    )
+                    # #2707: the second half of the finish-photo failure — the
+                    # pre-capture and this fallback both collided with the live
+                    # view. None here continues down the fallback chain.
+                    defer, buffered = live_frame_for_capture(printer_id)
+                    if defer:
+                        frame_data = buffered
+                    else:
+                        frame_data = await capture_frame(
+                            printer.external_camera_url,
+                            printer.external_camera_type or "mjpeg",
+                            snapshot_url=printer.external_camera_snapshot_url,
+                        )
                     if frame_data:
                         photos_dir = archive_dir / "photos"
                         photos_dir.mkdir(parents=True, exist_ok=True)

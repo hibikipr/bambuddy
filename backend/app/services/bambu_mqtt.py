@@ -472,6 +472,21 @@ class PrinterState:
     big_fan1_speed: int | None = None  # Auxiliary fan
     big_fan2_speed: int | None = None  # Chamber/exhaust fan
     heatbreak_fan_speed: int | None = None  # Hotend heatbreak fan
+    # Left auxiliary part cooling fan (optional accessory on P2S/X2D). Reported ONLY
+    # via device.airduct.parts (decoded part id 10 = FAN_REMOTE_COOLING_1 in Bambu
+    # Studio's AIR_FUN enum) — the firmware does NOT mirror it into any flat
+    # big_fanX_speed field, which is why it was previously dropped. 0-100 percent.
+    left_aux_fan_speed: int | None = None
+    # Chamber exhaust fan, derived from the airduct parts list containing decoded
+    # id 3. On the P2S this is the External Exhaust Fan kit and a base machine
+    # omits it, which is the case this flag exists to detect.
+    #
+    # NOTE: the flag is not P2S/X2D-specific despite the name. The H2 series
+    # (H2C/H2D/H2S) also reports part 3, so this goes True there too. That is
+    # harmless because only the P2S/X2D badge consults it — those models keep
+    # their unconditional "Chamber Fan" badge — but do not read this as
+    # "an exhaust kit is fitted" without also checking the model.
+    exhaust_fan_present: bool = False
     # Tray change history during current print: [(global_tray_id, layer_num), ...]
     # Used by usage tracker to split filament weight on mid-print tray switch
     tray_change_log: list = field(default_factory=list)
@@ -721,6 +736,12 @@ class BambuMQTTClient:
         # and the FINISH-state fallback don't both fire on the same
         # print. Reset to False on every print start.
         self._finish_photo_captured: bool = False
+        # #2702: one-shot re-request of the layer total. Armed at print start
+        # when the starting frame carried no `total_layer_num`, spent on the
+        # first layer advance that still has no denominator. Bambu firmware
+        # only re-sends *changed* fields, so a total we never received (or
+        # dropped) is only recoverable via a full pushall.
+        self._total_layers_refresh_armed: bool = False
         # #2547 end-of-print telemetry probe state. `_armed` is cleared once the
         # window has run for a print so a late FINISH re-send can't reopen it.
         self._eop_probe_armed: bool = True
@@ -2978,8 +2999,49 @@ class BambuMQTTClient:
                     f"{self.state.mc_print_sub_stage} -> {new_sub_stage}"
                 )
             self.state.mc_print_sub_stage = new_sub_stage
+        # Positive `total_layer_num` carried by *this* frame, or 0. Read up
+        # front because three places below consult it and they run in an order
+        # that is not the order they read most naturally in: the layer-advance
+        # refresh (#2702) must not fire on a frame that already answers it, the
+        # apply step must ignore firmware-reset 0s (#1771), and the new-print
+        # reset must not discard a total that belongs to the starting print.
+        total_from_this_frame = 0
+        if "total_layer_num" in data:
+            try:
+                total_from_this_frame = max(int(data["total_layer_num"] or 0), 0)
+            except (TypeError, ValueError):
+                # Must not escape. `_on_message` catches only JSONDecodeError
+                # and paho is left at `suppress_exceptions = False`, so an
+                # exception raised here is re-raised on the network thread and
+                # takes the printer connection down over one unusable field.
+                # Treat it as "not reported": the refresh below then recovers
+                # the real total from a pushall.
+                logger.debug(
+                    "[%s] ignoring unusable total_layer_num: %r",
+                    self.serial_number,
+                    data["total_layer_num"],
+                )
+
         if "layer_num" in data:
-            new_layer = int(data["layer_num"])
+            try:
+                new_layer = int(data["layer_num"])
+            except (TypeError, ValueError):
+                # Contained for the same reason as `total_layer_num` above: an
+                # exception raised here escapes `_update_state` and paho
+                # re-raises it on the network thread. Losing this frame would
+                # also lose the print-start and completion detection further
+                # down, which is worse than losing a layer number.
+                #
+                # Held at the last known layer rather than substituted with 0:
+                # a fabricated 0 reads as the firmware's cancel reset, which
+                # would move `_last_valid_layer_num` and show layer 0 in the UI
+                # until the next good frame.
+                logger.debug(
+                    "[%s] ignoring unusable layer_num: %r",
+                    self.serial_number,
+                    data["layer_num"],
+                )
+                new_layer = self.state.layer_num
             old_layer = self.state.layer_num
             # Save last non-zero layer for usage tracking (firmware resets to 0 on cancel)
             if old_layer > 0:
@@ -2988,6 +3050,25 @@ class BambuMQTTClient:
             # Trigger layer change callback if layer increased
             if new_layer > old_layer and self.on_layer_change:
                 self.on_layer_change(new_layer)
+            # #2702: the print is demonstrably laying down layers but we still
+            # have no denominator, so the pushall requested at print start
+            # either went unanswered or raced the printer learning the total.
+            # Ask once more — by layer 1 the printer definitely knows it.
+            # One-shot: an unanswered pushall must not turn into a per-layer
+            # retry loop for the rest of the print.
+            if (
+                new_layer > old_layer
+                and self._total_layers_refresh_armed
+                and not self.state.total_layers
+                and not total_from_this_frame
+            ):
+                self._total_layers_refresh_armed = False
+                logger.debug(
+                    "[%s] layer %s with no total_layer_num — re-requesting full status",
+                    self.serial_number,
+                    new_layer,
+                )
+                self._request_push_all()
             # #1867 last-layer finish-photo trigger. A1 Mini (and other
             # firmware variants) skips `stg_cur=22`, so the fallback fires
             # at gcode_state=FINISH — which runs AFTER user End G-code
@@ -3017,15 +3098,12 @@ class BambuMQTTClient:
                         "timelapse_was_active": self._timelapse_during_print,
                     }
                 )
-        if "total_layer_num" in data:
-            # Some firmware (P1S observed) resets `total_layer_num` to 0 at
-            # print end — same shape as the `layer_num` reset guarded above.
-            # Preserve the last known good value so the usage-tracker split
-            # path (#1771) has a denominator that survives the reset frame.
-            # Explicit reset to 0 happens on print start (`_handle_print_start`).
-            new_total = int(data["total_layer_num"])
-            if new_total > 0:
-                self.state.total_layers = new_total
+        if total_from_this_frame:
+            # Firmware (P1S observed) resets `total_layer_num` to 0 at print
+            # end — same shape as the `layer_num` reset guarded above. Applying
+            # only positive values preserves the last known good denominator so
+            # the usage-tracker split path (#1771) survives the reset frame.
+            self.state.total_layers = total_from_this_frame
 
         # Fan speeds (MQTT sends as string "0"-"15" representing speed levels, or percentage)
         # Convert to 0-100 percentage for display
@@ -3459,6 +3537,83 @@ class BambuMQTTClient:
                             f"[{self.serial_number}] airduct_mode changed: {self.state.airduct_mode} -> {new_mode}"
                         )
                     self.state.airduct_mode = new_mode
+                # Parse individual airduct fan parts (new-protocol models: P2S/X2D/H2*).
+                # Raw part ids are bit-packed — decoded id = raw_id >> 4 (bits 4-11),
+                # mirroring Bambu Studio DevFan::ParseV3_0. Decoded ids follow the
+                # AIR_FUN enum: 1=part cooling, 2=right aux, 3=chamber/exhaust,
+                # 10=left aux (FAN_REMOTE_COOLING_1). The airduct `parts` list only
+                # contains the fans that physically exist, so it doubles as a
+                # presence signal for the two P2S/X2D add-on kits:
+                #   - id 10 (left auxiliary part cooling fan) — reported ONLY here,
+                #     never mirrored into a flat big_fanX_speed field.
+                #   - id 3 (chamber exhaust fan) — its speed is mirrored into
+                #     big_fan2_speed, but the part is only listed when the External
+                #     Exhaust Fan kit (get_version module "eef") is installed.
+                # `state` is already a 0-100 percentage.
+                parts = airduct_data.get("parts")
+                if isinstance(parts, list):
+                    speeds: dict[int, int] = {}
+                    for part in parts:
+                        if not isinstance(part, dict):
+                            continue
+                        try:
+                            # Studio reads the id with get_flag_bits(id, 4, 8),
+                            # so mask after shifting for the same reason `state`
+                            # is masked below. Every id seen in the wild
+                            # (16/32/48/160) decodes identically either way —
+                            # this is consistency, not a live bug.
+                            part_id = (int(part["id"]) >> 4) & 0xFF
+                            # `state` is bit-packed like its sibling `range`
+                            # (end << 16 | start), so take only the low 8 bits —
+                            # the same decode Bambu Studio does with
+                            # get_flag_bits(state, 0, 8). Without the mask a
+                            # packed value would clamp to 100 instead of
+                            # decoding to the real percentage.
+                            part_state = int(part["state"]) & 0xFF
+                        except (KeyError, ValueError, TypeError):
+                            continue
+                        # Ids seen across the support-package archive:
+                        #   1 part cooling, 2 aux, 3 chamber/exhaust,
+                        #   6 (H2 series, unmapped), 10 left aux.
+                        speeds[part_id] = max(0, min(100, part_state))
+
+                    # Absence in this list is what tells us a kit is NOT fitted,
+                    # so it may only be trusted when the list is a full
+                    # inventory rather than a diff frame. `device.airduct` is
+                    # pushed field by field — the `modeCur` handler above exists
+                    # for exactly that reason — and a truncated `parts` read as
+                    # gospel would retract both accessory badges mid-print and
+                    # start rejecting `aux2` on a printer that has the fan.
+                    #
+                    # Every airduct layout in the support-package archive
+                    # (P2S base 1,2 / P2S+kit 1,2,3 / X2D 1,2,3,10 /
+                    # H2C,H2D,H2S 1,2,3,6 — 37 of 37 bundles) contains both the
+                    # part cooling fan and the aux fan, neither of which is
+                    # optional on any machine that reports an airduct at all.
+                    # A list carrying both is therefore a complete inventory; a
+                    # list missing either is a partial frame, and we take its
+                    # speeds without touching presence.
+                    is_full_inventory = 1 in speeds and 2 in speeds
+
+                    left_aux_speed = speeds.get(10)
+                    if left_aux_speed is None and not is_full_inventory:
+                        # Partial frame that didn't mention the left aux fan —
+                        # keep whatever we already knew about it.
+                        left_aux_speed = self.state.left_aux_fan_speed
+                    if left_aux_speed != self.state.left_aux_fan_speed:
+                        logger.debug(
+                            f"[{self.serial_number}] left_aux_fan_speed changed: "
+                            f"{self.state.left_aux_fan_speed} -> {left_aux_speed}"
+                        )
+                    # A FULL parts list without id 10 means the left aux fan is
+                    # not installed — report None so the UI can hide the widget.
+                    self.state.left_aux_fan_speed = left_aux_speed
+                    # id 3 present == chamber exhaust fan installed (base P2S
+                    # omits it). Only ever retracted on a full inventory.
+                    if 3 in speeds:
+                        self.state.exhaust_fan_present = True
+                    elif is_full_inventory:
+                        self.state.exhaust_fan_present = False
                 # Parse chamber temp - may be encoded as (target*65536+current) when > 500
                 # Check if we recently set the target locally (within 5 seconds)
                 local_set_time = self.state.temperatures.get("_chamber_target_set_time", 0)
@@ -4084,11 +4239,29 @@ class BambuMQTTClient:
             # Reset layer tracking for new print (needed for layer-based timelapse)
             self.state.layer_num = 0
             # Reset total_layers so the previous print's value can't bleed into
-            # this print's usage-tracker split before the new push_status arrives
-            # with the slicer's total (#1771 follow-on to the preservation guard
-            # above at line ~2135 — the guard now ignores firmware-reset 0s, so
-            # the explicit reset has to happen here instead).
-            self.state.total_layers = 0
+            # this print's usage-tracker split (#1771 follow-on to the
+            # preservation guard at the `total_layer_num` parse above — that
+            # guard ignores firmware-reset 0s, so the explicit reset has to
+            # happen here instead).
+            #
+            # #2702: reset to *this frame's* total, not to 0. The frame that
+            # trips the new-print detection can carry the new print's
+            # `total_layer_num` as well — the parse above has already applied
+            # it, and zeroing unconditionally threw it away. That looked
+            # harmless but is not recoverable: Bambu firmware sends only
+            # changed fields, so the printer never offers the total again, and
+            # the print runs to completion at `n/0` in the UI, in
+            # `{total_layers}` notifications, and as the usage-split
+            # denominator. The value only reappears on the next full pushall
+            # (reconnect / Force Refresh), which is why the symptom looked
+            # random and why a *stable* connection made it worse.
+            self.state.total_layers = total_from_this_frame
+            # If the starting frame brought no total, ask for one. Costs one
+            # MQTT message per print and covers the ordering where the printer
+            # published the total a frame or two before the state flip.
+            self._total_layers_refresh_armed = not total_from_this_frame
+            if self._total_layers_refresh_armed:
+                self._request_push_all()
             # Reset completion tracking for new print
             self._was_running = True
             self._completion_triggered = False
@@ -5712,13 +5885,16 @@ class BambuMQTTClient:
         """Set fan speed.
 
         Args:
-            fan: Fan index (1=part cooling, 2=auxiliary, 3=chamber)
+            fan: Fan index (1=part cooling, 2=auxiliary, 3=chamber, 10=left auxiliary).
+                Index 10 is the optional left auxiliary part cooling fan on P2S/X2D
+                (airduct part id 10); Bambu's official machine profiles drive it with
+                "M106 P10" in start/layer-change gcode.
             speed: Speed 0-255 (0=off, 255=full)
 
         Returns:
             True if command was sent, False otherwise
         """
-        if fan not in (1, 2, 3):
+        if fan not in (1, 2, 3, 10):
             logger.warning("[%s] Invalid fan index: %s", self.serial_number, fan)
             return False
 
@@ -5736,6 +5912,10 @@ class BambuMQTTClient:
     def set_chamber_fan(self, speed: int) -> bool:
         """Set chamber fan speed (0-255)."""
         return self.set_fan_speed(3, speed)
+
+    def set_left_aux_fan(self, speed: int) -> bool:
+        """Set left auxiliary part cooling fan speed (0-255). P2S/X2D accessory."""
+        return self.set_fan_speed(10, speed)
 
     def set_airduct_mode(self, mode: str) -> bool:
         """Set air conditioning mode (cooling or heating).

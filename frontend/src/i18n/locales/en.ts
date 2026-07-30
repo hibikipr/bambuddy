@@ -672,6 +672,8 @@ export default {
     fans: {
       partCooling: 'Part Cooling Fan',
       auxiliary: 'Auxiliary Fan',
+      leftAuxiliary: 'Left Auxiliary Fan',
+      exhaust: 'Exhaust',
       chamber: 'Chamber Fan',
     },
     // HMS errors
@@ -3709,6 +3711,7 @@ export default {
     showModified: 'Show modified dates',
     hideModified: 'Hide modified dates',
     lastModified: 'Last modified',
+    lastActivity: 'Last activity',
     resultsCount: '{{showing}} of {{total}} files',
     selectAll: 'Select All',
     deselectAll: 'Deselect All',

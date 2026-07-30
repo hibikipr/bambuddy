@@ -668,6 +668,8 @@ export default {
     fans: {
       partCooling: 'Parça Soğutma Fanı',
       auxiliary: 'Yardımcı Fan',
+      leftAuxiliary: 'Sol Yardımcı Fan',
+      exhaust: 'Egzoz',
       chamber: 'Hazne Fanı',
     },
     // HMS hataları
@@ -3676,6 +3678,7 @@ export default {
     showModified: 'Değiştirme tarihlerini göster',
     hideModified: 'Değiştirme tarihlerini gizle',
     lastModified: 'Son değiştirme',
+    lastActivity: 'Son etkinlik',
     resultsCount: '{{total}} dosyadan {{showing}} tanesi',
     selectAll: 'Tümünü Seç',
     deselectAll: 'Seçimi Kaldır',

@@ -668,6 +668,8 @@ export default {
     fans: {
       partCooling: 'Ventilateur pièce',
       auxiliary: 'Ventilateur auxiliaire',
+      leftAuxiliary: 'Ventilateur auxiliaire gauche',
+      exhaust: 'Extraction',
       chamber: 'Ventilateur chambre',
     },
     // HMS errors
@@ -3669,6 +3671,7 @@ export default {
     showModified: 'Afficher les dates de modification',
     hideModified: 'Masquer les dates de modification',
     lastModified: 'Dernière modification',
+    lastActivity: 'Dernière activité',
     resultsCount: '{{showing}} sur {{total}} fichiers',
     selectAll: 'Tout sélectionner',
     deselectAll: 'Tout désélectionner',

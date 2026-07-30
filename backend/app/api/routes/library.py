@@ -73,6 +73,7 @@ from backend.app.services.plate_thumbnail import inject_plate_thumbnails_if_miss
 from backend.app.services.stl_thumbnail import MIN_USABLE_STL_BYTES, generate_stl_thumbnail
 from backend.app.utils.filename import InvalidFilenameError, validate_print_filename
 from backend.app.utils.threemf_tools import (
+    expand_to_project_slots,
     extract_embedded_presets_from_3mf,
     extract_nozzle_mapping_from_3mf,
     extract_project_filaments_from_3mf,
@@ -3114,6 +3115,7 @@ async def get_library_file_filament_requirements(
     file_id: int,
     plate_id: int | None = None,
     request_id: str | None = None,
+    full_slots: bool = False,
     db: AsyncSession = Depends(get_db),
     auth_result: tuple[User | None, bool] = Depends(
         require_ownership_permission(
@@ -3130,6 +3132,10 @@ async def get_library_file_filament_requirements(
     Args:
         file_id: The library file ID
         plate_id: Optional plate index to get filaments for a specific plate
+        full_slots: Return one entry per *project* slot rather than only the
+            slots the plate consumes. See :func:`_expand_to_project_slots`.
+            Only the slice modal wants this; print-time AMS matching must keep
+            the used-only list.
     """
     import defusedxml.ElementTree as ET
 
@@ -3231,6 +3237,17 @@ async def get_library_file_filament_requirements(
                                     "used_in_plate": True,
                                 }
                             )
+
+            # Re-slicing a source that already carries slice_info (#2712).
+            # The block above answers "what does this plate consume", which is
+            # what print-time AMS matching needs. The slice modal needs "what
+            # slots exist", because its list is positional and the CLI binds
+            # entry N to slot N — so a source using only slot 4 handed the
+            # user's single pick to slot 1 and sliced slot 4 with the source's
+            # embedded default. Widen here rather than in the modal so the
+            # print path keeps the narrow list it depends on.
+            if full_slots and filaments:
+                filaments = expand_to_project_slots(zf, filaments)
 
             # Unsliced project files: slice_info had no per-plate data.
             # Return the FULL project_settings.config AMS slot list so
@@ -3761,10 +3778,26 @@ async def _run_slicer_with_fallback(
     # with printer …" (#2628). Replace unused-slot entries with the
     # plate's lowest used slot before the real slice so the loaded set is
     # materially homogeneous and printer-correct.
-    if is_3mf and request.plate is not None:
+    #
+    # ``plate`` is absent for single-plate and STL sources — the SliceModal
+    # skips the picker and omits the field — and absent means plate 1, the
+    # same reading as ``plate_num`` further down and as the schema's own
+    # description. Treating it as "unknown plate" instead is what left every
+    # single-plate 3MF unsubstituted (#2711): a MakerWorld project defining
+    # four filaments but painting only one reached the CLI with the other
+    # three still holding presets baked into the source for a different
+    # printer, and the slice died on the first of them.
+    #
+    # ``plate=0`` is the slice-all sentinel, not a plate: every slot is used
+    # by some plate, so there is nothing to substitute. It has to be excluded
+    # explicitly because the support-filament slots unioned in below are
+    # read from the project config and are not plate-scoped — they would
+    # survive the (empty) geometry lookup for plate 0 and become the anchor,
+    # collapsing every colour of a slice-all onto the support filament.
+    if is_3mf and request.plate != 0:
         from backend.app.services.slicer_3mf_convert import substitute_unused_plate_filaments
 
-        filament_jsons = substitute_unused_plate_filaments(primary_bytes, request.plate, filament_jsons)
+        filament_jsons = substitute_unused_plate_filaments(primary_bytes, request.plate or 1, filament_jsons)
 
     # Cross-class slice-all loop (#1493): when the user asks for
     # ``plate=0`` (all plates) AND the source's nozzle class differs from

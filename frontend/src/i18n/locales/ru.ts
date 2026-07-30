@@ -630,6 +630,8 @@ export default {
     fans: {
       partCooling: "Вентилятор обдува модели",
       auxiliary: "Дополнительный вентилятор",
+      leftAuxiliary: "Левый дополнительный вентилятор",
+      exhaust: "Вытяжка",
       chamber: "Вентилятор камеры",
     },
     clickToViewHmsErrors: "Нажмите, чтобы посмотреть ошибки HMS",
@@ -3484,6 +3486,7 @@ export default {
     showModified: "Показать даты изменения",
     hideModified: "Скрыть даты изменения",
     lastModified: "Изменено",
+    lastActivity: "Последняя активность",
     resultsCount: "Показано {{showing}} из {{total}} файлов",
     selectAll: "Выбрать всё",
     deselectAll: "Снять выделение",

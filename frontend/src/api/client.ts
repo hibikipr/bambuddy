@@ -565,6 +565,11 @@ export interface PrinterStatus {
   big_fan1_speed: number | null;     // Auxiliary fan
   big_fan2_speed: number | null;     // Chamber/exhaust fan
   heatbreak_fan_speed: number | null; // Hotend heatbreak fan
+  // Left auxiliary part cooling fan (optional P2S/X2D accessory, M106 P10).
+  // null = not installed / not reported by this model.
+  left_aux_fan_speed: number | null;
+  // Chamber exhaust fan present (P2S/X2D External Exhaust Fan kit, airduct part 3).
+  exhaust_fan_present: boolean;
   firmware_version: string | null;   // Firmware version from MQTT
   // Developer LAN mode: true = enabled, false = disabled, null = unknown
   developer_mode: boolean | null;
@@ -3987,7 +3992,7 @@ export const api = {
       method: 'POST',
     }),
 
-  setFanSpeed: (printerId: number, fan: 'part' | 'aux' | 'chamber', speed: number) =>
+  setFanSpeed: (printerId: number, fan: 'part' | 'aux' | 'aux2' | 'chamber', speed: number) =>
     request<{ success: boolean; message: string }>(`/printers/${printerId}/fan-speed?fan=${fan}&speed=${speed}`, {
       method: 'POST',
     }),
@@ -4741,10 +4746,17 @@ export const api = {
     archiveId: number,
     plateId?: number,
     requestId?: string,
+    /** Ask for one entry per project slot instead of only the slots this
+     * plate consumes. The slice modal needs it: its filament list is
+     * positional, so a source whose only used slot is 4 must still present
+     * four rows or the user's pick is bound to slot 1 (#2712). Print-time
+     * AMS matching must NOT set this — it wants the used-only list. */
+    fullSlots?: boolean,
   ) => {
     const qs = new URLSearchParams();
     if (plateId !== undefined) qs.set('plate_id', String(plateId));
     if (requestId) qs.set('request_id', requestId);
+    if (fullSlots) qs.set('full_slots', 'true');
     return request<{
       archive_id: number;
       filename: string;
@@ -6462,10 +6474,17 @@ export const api = {
     fileId: number,
     plateId?: number,
     requestId?: string,
+    /** Ask for one entry per project slot instead of only the slots this
+     * plate consumes. The slice modal needs it: its filament list is
+     * positional, so a source whose only used slot is 4 must still present
+     * four rows or the user's pick is bound to slot 1 (#2712). Print-time
+     * AMS matching must NOT set this — it wants the used-only list. */
+    fullSlots?: boolean,
   ) => {
     const qs = new URLSearchParams();
     if (plateId !== undefined) qs.set('plate_id', String(plateId));
     if (requestId) qs.set('request_id', requestId);
+    if (fullSlots) qs.set('full_slots', 'true');
     return request<{
       file_id: number;
       filename: string;
