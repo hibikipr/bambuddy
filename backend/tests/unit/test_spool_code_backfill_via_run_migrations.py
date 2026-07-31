@@ -10,7 +10,9 @@ exercises the full migration sequence against the complete schema instead.
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.core.database import run_migrations
@@ -123,5 +125,69 @@ async def test_backfill_through_run_migrations_is_idempotent(monkeypatch):
 
         rows = await _codes_for(engine, 1)
         assert len(rows) == 1
+    finally:
+        await engine.dispose()
+
+
+async def test_spool_code_kind_check_constraint_enforced_after_migration(monkeypatch):
+    """Simulates a pre-existing SQLite DB from before the kind CHECK
+    constraint existed: spool_code created without it, one valid row already
+    in place. run_migrations must recreate the table with the constraint
+    baked in, preserving that row, and reject a bogus kind afterward."""
+    monkeypatch.setattr("backend.app.core.database.is_sqlite", lambda: True)
+    engine = await _engine()
+    try:
+        await _insert_spool_via_orm(engine, spool_id=1, barcode=None)
+        async with engine.begin() as conn:
+            # Recreate spool_code the "old" way - no CHECK constraint - and
+            # seed it with a row that must survive the migration's rebuild.
+            await conn.execute(text("DROP TABLE spool_code"))
+            await conn.execute(
+                text("""
+                CREATE TABLE spool_code (
+                    id INTEGER PRIMARY KEY,
+                    spool_id INTEGER NOT NULL REFERENCES spool(id) ON DELETE CASCADE,
+                    code VARCHAR(64) NOT NULL,
+                    kind VARCHAR(16) NOT NULL,
+                    is_refill BOOLEAN DEFAULT 0,
+                    is_primary BOOLEAN DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (spool_id, code)
+                )
+            """)
+            )
+            await conn.execute(
+                text("INSERT INTO spool_code (spool_id, code, kind, is_primary) VALUES (1, 'PRE-EXISTING', 'sku', 1)")
+            )
+
+        async with engine.begin() as conn:
+            await run_migrations(conn)
+
+        rows = await _codes_for(engine, 1)
+        assert rows == [("PRE-EXISTING", "sku", True)]
+
+        with pytest.raises(IntegrityError):
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("INSERT INTO spool_code (spool_id, code, kind, is_primary) VALUES (1, 'BOGUS', 'bogus', 0)")
+                )
+    finally:
+        await engine.dispose()
+
+
+async def test_spool_code_kind_check_migration_is_idempotent(monkeypatch):
+    monkeypatch.setattr("backend.app.core.database.is_sqlite", lambda: True)
+    engine = await _engine()
+    try:
+        async with engine.begin() as conn:
+            await run_migrations(conn)
+        async with engine.begin() as conn:
+            await run_migrations(conn)  # second pass should be a no-op
+
+        with pytest.raises(IntegrityError):
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("INSERT INTO spool_code (spool_id, code, kind, is_primary) VALUES (1, 'X', 'bogus', 0)")
+                )
     finally:
         await engine.dispose()

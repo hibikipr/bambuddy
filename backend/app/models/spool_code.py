@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from backend.app.core.database import Base
@@ -30,7 +30,10 @@ class SpoolCode(Base):
 
     spool: Mapped["Spool"] = relationship(back_populates="codes")
 
-    __table_args__ = (UniqueConstraint("spool_id", "code", name="uq_spool_code_spool_id_code"),)
+    __table_args__ = (
+        UniqueConstraint("spool_id", "code", name="uq_spool_code_spool_id_code"),
+        CheckConstraint("kind IN ('gtin', 'sku')", name="ck_spool_code_kind"),
+    )
 
 
 from backend.app.models.spool import Spool  # noqa: E402, F401

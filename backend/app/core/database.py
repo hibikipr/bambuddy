@@ -3914,6 +3914,48 @@ async def run_migrations(conn):
     # (new model, not an ALTER), so this only needs to backfill rows.
     await _migrate_backfill_spool_codes(conn)
 
+    # Migration: CHECK constraint on spool_code.kind (Martin review round 2)
+    # — "gtin"/"sku" was previously only documented in a code comment, with
+    # no DB-level enforcement. PostgreSQL supports ADD CONSTRAINT directly;
+    # SQLite has no ALTER TABLE ADD CONSTRAINT at all, so it needs the same
+    # recreate-table approach as the print_queue migrations above.
+    if is_sqlite():
+        try:
+            result = await conn.execute(text("SELECT sql FROM sqlite_master WHERE type='table' AND name='spool_code'"))
+            row = result.fetchone()
+            if row and "CHECK" not in (row[0] or ""):
+                await conn.execute(
+                    text("""
+                    CREATE TABLE spool_code_new (
+                        id INTEGER PRIMARY KEY,
+                        spool_id INTEGER NOT NULL REFERENCES spool(id) ON DELETE CASCADE,
+                        code VARCHAR(64) NOT NULL,
+                        kind VARCHAR(16) NOT NULL CHECK (kind IN ('gtin', 'sku')),
+                        is_refill BOOLEAN DEFAULT 0,
+                        is_primary BOOLEAN DEFAULT 0,
+                        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                        UNIQUE (spool_id, code)
+                    )
+                """)
+                )
+                await conn.execute(
+                    text("""
+                    INSERT INTO spool_code_new
+                    SELECT id, spool_id, code, kind, is_refill, is_primary, created_at
+                    FROM spool_code
+                """)
+                )
+                await conn.execute(text("DROP TABLE spool_code"))
+                await conn.execute(text("ALTER TABLE spool_code_new RENAME TO spool_code"))
+        except (OperationalError, ProgrammingError):
+            pass  # Already applied
+        await _safe_execute(conn, "CREATE INDEX IF NOT EXISTS ix_spool_code_spool_id ON spool_code (spool_id)")
+        await _safe_execute(conn, "CREATE INDEX IF NOT EXISTS ix_spool_code_code ON spool_code (code)")
+    else:
+        await _safe_execute(
+            conn, "ALTER TABLE spool_code ADD CONSTRAINT ck_spool_code_kind CHECK (kind IN ('gtin', 'sku'))"
+        )
+
     # Migration: per-file print progress inside a project (#1897).
     # - print_archives.library_file_id: which library file a queued run was
     #   dispatched from; nullable, no FK constraint added to existing tables
