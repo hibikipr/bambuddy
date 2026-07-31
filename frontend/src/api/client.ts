@@ -1185,6 +1185,7 @@ export interface AppSettings {
   auto_archive: boolean;
   save_thumbnails: boolean;
   capture_finish_photo: boolean;
+  finish_photo_restore_plate: boolean;
   default_filament_cost: number;
   currency: string;
   energy_cost_per_kwh: number;
@@ -3943,7 +3944,11 @@ export const api = {
       method: 'POST',
     }),
   testExternalCamera: (printerId: number, url: string, cameraType: string) =>
-    request<{ success: boolean; error?: string; resolution?: string }>(
+    // `coalesced` is true when the frame came from a capture that was already
+    // running (Obico polling, a snapshot) rather than a connection this test
+    // opened — a single-reader camera is shared rather than opened twice, so
+    // the result is real but says nothing about reaching the camera just now.
+    request<{ success: boolean; error?: string; resolution?: string; coalesced?: boolean }>(
       `/printers/${printerId}/camera/external/test?url=${encodeURIComponent(url)}&camera_type=${encodeURIComponent(cameraType)}`,
       { method: 'POST' }
     ),

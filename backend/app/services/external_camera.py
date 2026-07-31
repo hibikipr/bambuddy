@@ -8,6 +8,7 @@ to ensure they are well-formed before use.
 """
 
 import asyncio
+import functools
 import logging
 import re
 import shutil
@@ -175,6 +176,70 @@ def get_ffmpeg_path() -> str | None:
     return None
 
 
+# In-flight one-shot captures, keyed by (url, camera_type, snapshot_url) —
+# the tuple that actually identifies the physical resource being contended
+# (#2707 comment thread, following #2705's shape for the built-in path).
+#
+# V4L2 USB devices allow exactly one open handle, and is_stream_active() /
+# try_get_active_buffered_frame() (#2707) only stop a one-shot capturer from
+# competing with the fan-out live view. They do nothing for capturer-vs-
+# capturer with no viewer attached, where every consumer correctly concludes
+# it isn't competing with a viewer and then collides with the others -
+# exactly the #2705 report, just for this module's callers instead of
+# capture_camera_frame_bytes()'s (Obico polling, the in-print frame bank,
+# the finish-photo moment, plate detection, and the notification snapshot
+# all reach capture_frame() independently).
+#
+# snapshot_url is part of the key (not just url/camera_type) because it
+# routes to a completely different endpoint (#1177) - two printers that
+# share a camera_url but differ only in snapshot_url must not coalesce.
+_inflight_captures: dict[tuple[str, str, str | None], asyncio.Task[bytes | None]] = {}
+
+
+def capture_in_flight(url: str, camera_type: str, snapshot_url: str | None = None) -> bool:
+    """Return True iff a one-shot capture for this key is running right now.
+
+    Mirrors camera.py's capture_in_flight() for the built-in path - for a
+    caller that needs to know it will JOIN someone else's capture rather
+    than open its own connection. Ordinary consumers should ignore this:
+    they want "a recent frame", and capture_frame() already does the right
+    thing for them.
+    """
+    task = _inflight_captures.get((url, camera_type, snapshot_url))
+    return task is not None and not task.done()
+
+
+def _discard_inflight_capture(key: tuple[str, str, str | None], task: asyncio.Task) -> None:
+    """Done-callback: drop the finished task from the in-flight registry.
+
+    Guarded on identity so a slow task that finishes after a newer capture
+    has registered for the same key can't evict its successor.
+
+    Also retrieves the exception, if any: the leader normally awaits the
+    task and would surface it, but a leader whose own caller was cancelled
+    leaves nobody to collect it, and an unretrieved task exception is
+    logged by asyncio as a warning with a traceback at an arbitrary later
+    point otherwise.
+    """
+    if _inflight_captures.get(key) is task:
+        del _inflight_captures[key]
+    if not task.cancelled() and task.exception() is not None:
+        logger.debug("In-flight external-camera capture for %s ended in an exception", _log_key(key))
+
+
+def _log_key(key: tuple[str, str, str | None]) -> str:
+    """Render an in-flight key for a log line, with credentials redacted.
+
+    Unlike camera.py's coalescing — which is keyed by IP address and so has
+    nothing to hide — these keys carry the camera URL, and an RTSP camera URL
+    routinely embeds ``user:pass@``. Redact before truncating: slicing first
+    can cut the URL short of the ``@`` the pattern anchors on and leave the
+    password in the log, which is why every other URL log in this module does
+    it in this order.
+    """
+    return redact_url_credentials(key[0])[:50] if key[0] else "None"
+
+
 async def capture_frame(
     url: str,
     camera_type: str,
@@ -186,7 +251,10 @@ async def capture_frame(
     Args:
         url: Live-stream URL (MJPEG stream, RTSP URL, HTTP snapshot URL, or USB device path).
         camera_type: "mjpeg", "rtsp", "snapshot", or "usb".
-        timeout: Connection timeout in seconds.
+        timeout: Connection timeout in seconds. Applies to this caller's own
+            wait, including when it joins another caller's capture - call
+            sites disagree about the value, and a follower must not silently
+            inherit the leader's deadline in either direction.
         snapshot_url: Optional override for single-frame capture. When set, fetched
             via plain HTTP GET regardless of `camera_type`. Bypasses MJPEG warm-up
             handling on sources that expose a dedicated frame endpoint (e.g. go2rtc's
@@ -195,27 +263,120 @@ async def capture_frame(
 
     Returns:
         JPEG bytes or None on failure
+
+    Concurrent callers for the same (url, camera_type, snapshot_url) share
+    one capture (#2705-shape fix, filed for the external-camera path as a
+    follow-up on #2707): the first opens the connection, everyone arriving
+    while it's in flight awaits the same result. This coalesces; it does
+    not cache - a call that arrives after the previous capture finished
+    always captures fresh, since plate detection and the finish-photo path
+    judge a running print from these frames and a stale one there is worse
+    than a slow one (#1397).
     """
-    if snapshot_url:
-        # Redact before truncating — slicing first can cut the URL short of the
-        # ``@`` the pattern anchors on and leave the password in the log.
-        logger.debug("capture_frame using snapshot override url=%s...", redact_url_credentials(snapshot_url)[:50])
-        return await _capture_snapshot(snapshot_url, timeout)
-    logger.debug(
-        "capture_frame called: type=%s, url=%s...",
-        camera_type,
-        redact_url_credentials(url)[:50] if url else "None",
-    )
-    if camera_type == "mjpeg":
-        return await _capture_mjpeg_frame(url, timeout)
-    elif camera_type == "rtsp":
-        return await _capture_rtsp_frame(url, timeout)
-    elif camera_type == "snapshot":
-        return await _capture_snapshot(url, timeout)
-    elif camera_type == "usb":
-        return await _capture_usb_frame(url, timeout)
+    key = (url, camera_type, snapshot_url)
+
+    # A follower whose leader fails takes a turn of its own rather than
+    # inheriting a failure it never had a chance to avoid - by then the
+    # leader has finished, so there's no connection left to compete with.
+    # Bounded at two rounds: if the capture we joined AND its replacement
+    # both failed, a third attempt won't help, and this caller has already
+    # spent its patience.
+    for _ in range(2):
+        leader = _inflight_captures.get(key)
+        if leader is None or leader.done():
+            break
+        try:
+            frame = await asyncio.wait_for(asyncio.shield(leader), timeout=timeout)
+        except TimeoutError:
+            # shield() keeps the capture running for whoever else is still
+            # waiting on it - giving up is this caller's decision alone.
+            logger.warning(
+                "Gave up waiting %ss on the in-flight external-camera capture for %s", timeout, _log_key(key)
+            )
+            return None
+        except asyncio.CancelledError:
+            # Distinguish "the capture I joined was cancelled" from "I was
+            # cancelled". Only the former is ours to recover from.
+            if not leader.cancelled():
+                raise
+            logger.info("In-flight external-camera capture for %s was cancelled; capturing our own", _log_key(key))
+            continue
+        if frame is not None:
+            logger.debug(
+                "Reusing in-flight external-camera capture for %s: %d bytes (no second connection opened)",
+                _log_key(key),
+                len(frame),
+            )
+            return frame
+        logger.debug("In-flight external-camera capture for %s failed; capturing our own", _log_key(key))
     else:
-        logger.warning("Unknown camera type: %s", camera_type)
+        return None
+
+    task = asyncio.create_task(_capture_frame_uncoalesced(url, camera_type, timeout, snapshot_url))
+    _inflight_captures[key] = task
+    task.add_done_callback(functools.partial(_discard_inflight_capture, key))
+    # No wait_for here: this caller IS the capture, and each dispatched
+    # _capture_* function already enforces `timeout` internally, where it
+    # can also kill the ffmpeg process - a second deadline on top would
+    # abandon the subprocess instead of killing it. shield() so a cancelled
+    # leader (a client navigating away mid-request is routine) doesn't take
+    # the capture down with it - followers already waiting on it still get
+    # their frame.
+    return await asyncio.shield(task)
+
+
+async def _capture_frame_uncoalesced(
+    url: str,
+    camera_type: str,
+    timeout: int,
+    snapshot_url: str | None,
+) -> bytes | None:
+    """Open a connection and capture one frame. See capture_frame().
+
+    Callers want that wrapper, not this: it opens a connection
+    unconditionally, which is the collision #2705/#2707 are about.
+
+    Failure is reported as ``None``, never as an exception. That is load-
+    bearing now that captures are shared: the coalescing wrapper hands one
+    task's outcome to every caller waiting on it, and it can only give a
+    follower its own turn for an outcome it can recognise. An exception
+    escaping here would instead propagate to every follower at once —
+    turning one caller's failure into N — and none of them would retry.
+    The per-type helpers below each catch what they expect and return None,
+    but they catch narrowly (``aiohttp.ClientError``/``OSError``/timeouts),
+    so this is the structural guarantee rather than one contingent on their
+    coverage. Mirrors ``_capture_camera_frame_bytes_uncoalesced`` in
+    camera.py, which ends in the same blanket catch for the same reason.
+    """
+    try:
+        if snapshot_url:
+            # Redact before truncating — slicing first can cut the URL short of the
+            # ``@`` the pattern anchors on and leave the password in the log.
+            logger.debug("capture_frame using snapshot override url=%s...", redact_url_credentials(snapshot_url)[:50])
+            return await _capture_snapshot(snapshot_url, timeout)
+        logger.debug(
+            "capture_frame called: type=%s, url=%s...",
+            camera_type,
+            redact_url_credentials(url)[:50] if url else "None",
+        )
+        if camera_type == "mjpeg":
+            return await _capture_mjpeg_frame(url, timeout)
+        elif camera_type == "rtsp":
+            return await _capture_rtsp_frame(url, timeout)
+        elif camera_type == "snapshot":
+            return await _capture_snapshot(url, timeout)
+        elif camera_type == "usb":
+            return await _capture_usb_frame(url, timeout)
+        else:
+            logger.warning("Unknown camera type: %s", camera_type)
+            return None
+    except asyncio.CancelledError:
+        # Cancellation is not a capture failure and must stay distinguishable:
+        # the wrapper checks ``leader.cancelled()`` to decide whether a
+        # follower may take its own turn.
+        raise
+    except Exception:
+        logger.exception("External camera capture failed for %s", redact_url_credentials(url)[:50] if url else "None")
         return None
 
 
@@ -566,12 +727,26 @@ async def test_connection(url: str, camera_type: str) -> dict:
     """Test camera connection.
 
     Returns:
-        Dict with {success: bool, error?: str, resolution?: str}
+        Dict with {success: bool, error?: str, resolution?: str, coalesced: bool}
+
+    ``coalesced`` is True when the frame came from a capture that was already
+    running rather than from a connection this test opened. Captures are shared
+    (see ``capture_frame``), so a test that lands while Obico is polling — or
+    while any other one-shot consumer is mid-capture — gets that frame back and
+    would otherwise report a healthy connection it never made, which is the one
+    answer a *connection test* must not give silently. Forcing an uncoalesced
+    capture here would be worse: it would open the second handle to a
+    single-reader device that this whole mechanism exists to prevent. So the
+    test still shares, and says so. Mirrors the ``coalesced_capture`` code the
+    built-in diagnostic reports for the same situation (camera_diagnose.py).
     """
     logger.info("Testing camera connection: type=%s, url=%s...", camera_type, redact_url_credentials(url)[:50])
+    # Sampled before the call, while it can still distinguish "someone else is
+    # mid-capture" from "I am the one capturing".
+    coalesced = capture_in_flight(url, camera_type)
     try:
         frame = await capture_frame(url, camera_type, timeout=10)
-        logger.info("Capture result: %s bytes", len(frame) if frame else 0)
+        logger.info("Capture result: %s bytes%s", len(frame) if frame else 0, " (coalesced)" if coalesced else "")
 
         if frame:
             # Try to get resolution from JPEG header
@@ -590,15 +765,15 @@ async def test_connection(url: str, camera_type: str) -> dict:
             except (IndexError, ValueError):
                 pass  # Resolution detection is optional; fall back to default
 
-            return {"success": True, "resolution": resolution}
+            return {"success": True, "resolution": resolution, "coalesced": coalesced}
         else:
-            return {"success": False, "error": "Failed to capture frame from camera"}
+            return {"success": False, "error": "Failed to capture frame from camera", "coalesced": coalesced}
 
     except Exception as e:
         # Sanitize error message - don't expose internal details
         error_type = type(e).__name__
         logger.error("Camera connection test failed: %s", e)
-        return {"success": False, "error": f"Connection failed: {error_type}"}
+        return {"success": False, "error": f"Connection failed: {error_type}", "coalesced": coalesced}
 
 
 async def generate_mjpeg_stream(

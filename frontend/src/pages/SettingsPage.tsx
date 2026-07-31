@@ -969,6 +969,7 @@ export function SettingsPage() {
       settings.auto_archive !== localSettings.auto_archive ||
       settings.save_thumbnails !== localSettings.save_thumbnails ||
       settings.capture_finish_photo !== localSettings.capture_finish_photo ||
+      (settings.finish_photo_restore_plate ?? true) !== (localSettings.finish_photo_restore_plate ?? true) ||
       settings.default_filament_cost !== localSettings.default_filament_cost ||
       settings.currency !== localSettings.currency ||
       settings.energy_cost_per_kwh !== localSettings.energy_cost_per_kwh ||
@@ -1069,6 +1070,10 @@ export function SettingsPage() {
         auto_archive: localSettings.auto_archive,
         save_thumbnails: localSettings.save_thumbnails,
         capture_finish_photo: localSettings.capture_finish_photo,
+        // #2547: `?? true` mirrors the toggle's own default, so an install
+        // whose settings payload predates this field saves what the user is
+        // actually looking at rather than `undefined`.
+        finish_photo_restore_plate: localSettings.finish_photo_restore_plate ?? true,
         default_filament_cost: localSettings.default_filament_cost,
         currency: localSettings.currency,
         energy_cost_per_kwh: localSettings.energy_cost_per_kwh,
@@ -1176,7 +1181,15 @@ export function SettingsPage() {
       const result = await api.testExternalCamera(printerId, url, cameraType);
       setExtCameraTestResults(prev => ({ ...prev, [printerId]: result }));
       if (result.success) {
-        showToast(t('settings.toast.cameraConnected', { resolution: result.resolution || '' }), 'success');
+        // A shared capture means the frame is real but was not fetched over a
+        // connection this test opened, so say so rather than implying the
+        // camera was just reached.
+        showToast(
+          result.coalesced
+            ? t('settings.toast.cameraConnectedCoalesced', { resolution: result.resolution || '' })
+            : t('settings.toast.cameraConnected', { resolution: result.resolution || '' }),
+          'success'
+        );
       } else {
         showToast(result.error || t('settings.toast.connectionFailed'), 'error');
       }
@@ -1901,6 +1914,28 @@ export function SettingsPage() {
                   <div className="w-11 h-6 bg-bambu-dark-tertiary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-bambu-green"></div>
                 </label>
               </div>
+              {/* #2547: only meaningful while finish photos are being taken at
+                  all, so it hangs off the toggle above rather than standing
+                  alone in the list. */}
+              {localSettings.capture_finish_photo && (
+                <div className="flex items-center justify-between pl-4 border-l-2 border-bambu-dark-tertiary">
+                  <div>
+                    <p className="text-white">{t('settings.finishPhotoRestorePlate')}</p>
+                    <p className="text-sm text-bambu-gray">
+                      {t('settings.finishPhotoRestorePlateDescription')}
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={localSettings.finish_photo_restore_plate ?? true}
+                      onChange={(e) => updateSetting('finish_photo_restore_plate', e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-bambu-dark-tertiary peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-bambu-green"></div>
+                  </label>
+                </div>
+              )}
               {localSettings.capture_finish_photo && ffmpegStatus && !ffmpegStatus.installed && (
                 <div className="flex items-start gap-2 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
                   <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
