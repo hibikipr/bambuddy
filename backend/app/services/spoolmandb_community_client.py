@@ -418,10 +418,13 @@ async def _refresh() -> tuple[dict, dict, list, list]:
         # + serves the stale cache on any refresh failure, so raising here
         # reuses that fallback instead of caching this.
         raise RuntimeError("SpoolmanDB-Community refresh parsed zero manufacturer files - keeping previous cache")
-    gtin_index, sku_index = _build_index(variants)
+    # Offloaded to a thread: _build_index is a CPU-bound loop over every
+    # variant, and this happens on a live user request whenever the 24h TTL
+    # has expired - it must not block the event loop for other requests.
+    gtin_index, sku_index = await asyncio.to_thread(_build_index, variants)
     brands = sorted({v["manufacturer"] for v in variants if v.get("manufacturer")})
     try:
-        _write_cache_file(gtin_index, sku_index, brands, variants, time.time())
+        await asyncio.to_thread(_write_cache_file, gtin_index, sku_index, brands, variants, time.time())
     except Exception:
         logger.warning("Failed to write SpoolmanDB-Community cache file", exc_info=True)
     return gtin_index, sku_index, brands, variants
@@ -438,7 +441,7 @@ async def _ensure_loaded(force: bool = False) -> None:
             and (time.time() - _index_loaded_at) < SPOOLMANDB_COMMUNITY_TTL_SECONDS
         ):
             return
-        loaded = None if force else _load_cached()
+        loaded = None if force else await asyncio.to_thread(_load_cached)
         if loaded is None:
             try:
                 loaded = await _refresh()
@@ -448,7 +451,7 @@ async def _ensure_loaded(force: bool = False) -> None:
                 # disk to fall back to (e.g. first-ever startup with no
                 # network) — that's the one case where the caller must know
                 # the lookup couldn't be attempted at all.
-                loaded = _load_stale_cached()
+                loaded = await asyncio.to_thread(_load_stale_cached)
                 if loaded is not None:
                     logger.warning(
                         "SpoolmanDB-Community refresh failed; serving stale disk cache instead", exc_info=True
@@ -458,7 +461,7 @@ async def _ensure_loaded(force: bool = False) -> None:
                     # deployment. Fall back to the build-time seed snapshot
                     # (if the image was built with one) rather than leaving
                     # every lookup with zero coverage forever.
-                    loaded = _load_seed_cache()
+                    loaded = await asyncio.to_thread(_load_seed_cache)
                     if loaded is None:
                         raise
                     logger.warning("SpoolmanDB-Community offline with no disk cache; serving build-time seed instead")
@@ -467,7 +470,7 @@ async def _ensure_loaded(force: bool = False) -> None:
                     # every time, and so the next successful online refresh
                     # naturally replaces it via the usual TTL path.
                     try:
-                        _write_cache_file(*loaded, built_at=time.time())
+                        await asyncio.to_thread(_write_cache_file, *loaded, built_at=time.time())
                     except Exception:
                         logger.warning("Failed to persist seed cache into DATA_DIR", exc_info=True)
         _gtin_index, _sku_index, _brands, _variants = loaded

@@ -37,10 +37,11 @@ logger = logging.getLogger(__name__)
 OFD_ALL_URL = "https://api.openfilamentdatabase.org/json/all.json"
 OFD_TTL_SECONDS = 24 * 3600
 
-# Generous cap against a malicious/broken upstream serving an oversized or
-# infinite response — the real dump is a small fraction of this. Mirrors the
-# same guard already on the SpoolmanDB-Community client's tarball download.
-_MAX_ALL_JSON_BYTES = 128 * 1024 * 1024
+# Cap against a malicious/broken upstream serving an oversized or infinite
+# response. The real dump is ~1.5MB; this leaves over 10x headroom, roughly
+# matching the proportionate caps on the SpoolmanDB-Community client's
+# tarball download (13MB real / 64MB cap).
+_MAX_ALL_JSON_BYTES = 16 * 1024 * 1024
 
 # Bump whenever the on-disk cache shape changes, so an old cache file (e.g.
 # pre-dating article_number/variant-code support) is treated as stale and
@@ -292,7 +293,10 @@ async def _download_all_json() -> dict:
 async def _refresh() -> tuple[dict, dict, dict, list]:
     """Download all.json; build the indexes + brand-name list; cache all of it."""
     all_json = await _download_all_json()
-    gtin_index, article_index, variant_codes = _build_index(all_json)
+    # Offloaded to a thread: _build_index is a CPU-bound loop over the whole
+    # dump, and this happens on a live user request whenever the 24h TTL has
+    # expired - it must not block the event loop for other requests.
+    gtin_index, article_index, variant_codes = await asyncio.to_thread(_build_index, all_json)
     brands = sorted({b["name"] for b in all_json.get("brands", []) if b.get("name")})
     if not gtin_index and not article_index:
         # A 200 that parses to zero entries (e.g. upstream's dump shape
@@ -302,7 +306,7 @@ async def _refresh() -> tuple[dict, dict, dict, list]:
         # failure, so raising here reuses that fallback instead of caching this.
         raise RuntimeError("OFD refresh parsed zero entries - keeping previous cache")
     try:
-        _write_cache_file(gtin_index, article_index, variant_codes, brands, time.time())
+        await asyncio.to_thread(_write_cache_file, gtin_index, article_index, variant_codes, brands, time.time())
     except Exception:
         logger.warning("Failed to write OFD cache file", exc_info=True)
     return gtin_index, article_index, variant_codes, brands
@@ -317,7 +321,7 @@ async def _ensure_loaded(force: bool = False) -> None:
         # already refreshed while we were waiting.
         if _gtin_index is not None and not force and (time.time() - _index_loaded_at) < OFD_TTL_SECONDS:
             return
-        loaded = None if force else _load_cached()
+        loaded = None if force else await asyncio.to_thread(_load_cached)
         if loaded is None:
             try:
                 loaded = await _refresh()
@@ -327,7 +331,7 @@ async def _ensure_loaded(force: bool = False) -> None:
                 # disk to fall back to (e.g. first-ever startup with no
                 # network) — that's the one case where the caller must know
                 # the lookup couldn't be attempted at all.
-                loaded = _load_stale_cached()
+                loaded = await asyncio.to_thread(_load_stale_cached)
                 if loaded is not None:
                     logger.warning("OFD refresh failed; serving stale disk cache instead", exc_info=True)
                 else:
@@ -335,7 +339,7 @@ async def _ensure_loaded(force: bool = False) -> None:
                     # deployment. Fall back to the build-time seed snapshot
                     # (if the image was built with one) rather than leaving
                     # every lookup with zero coverage forever.
-                    loaded = _load_seed_cache()
+                    loaded = await asyncio.to_thread(_load_seed_cache)
                     if loaded is None:
                         raise
                     logger.warning("OFD offline with no disk cache; serving build-time seed instead")
@@ -344,7 +348,7 @@ async def _ensure_loaded(force: bool = False) -> None:
                     # every time, and so the next successful online refresh
                     # naturally replaces it via the usual TTL path.
                     try:
-                        _write_cache_file(*loaded, built_at=time.time())
+                        await asyncio.to_thread(_write_cache_file, *loaded, built_at=time.time())
                     except Exception:
                         logger.warning("Failed to persist seed cache into DATA_DIR", exc_info=True)
         _gtin_index, _article_index, _variant_codes, _brands = loaded
