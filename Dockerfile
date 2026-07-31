@@ -59,21 +59,30 @@ RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --root-user-action=ignore --upgrade 'pip>=26.1.2' \
  && pip install --root-user-action=ignore -r requirements.txt
 
-# Copy backend
-COPY backend/ ./backend/
+# Bake build-time OFD/SpoolmanDB-Community snapshots into the image, so a
+# brand-new self-hosted/air-gapped deployment has barcode coverage from first
+# boot instead of an empty cache with nothing to fall back to (see each
+# client's `_load_seed_cache` and the seed scripts' own docstrings). Never
+# fails the build - a network hiccup here just means the image ships without
+# a seed, same as before this existed. Both community filament databases are
+# MIT-licensed, data included, so bundling a snapshot of either is clean.
+#
+# Only the minimal subset these two scripts actually import is copied here -
+# not the full `backend/` tree below - so unrelated backend changes (routes,
+# models, etc.) don't bust the Docker layer cache for these network-fetching
+# steps on every build. Mirrors the `COPY frontend/scripts/ ./scripts/`
+# split above for the same reason (Tesseract's postinstall).
+COPY backend/__init__.py ./backend/__init__.py
+COPY backend/app/__init__.py ./backend/app/__init__.py
+COPY backend/app/core/__init__.py backend/app/core/paths.py ./backend/app/core/
+COPY backend/app/services/__init__.py backend/app/services/ofd_client.py backend/app/services/spoolmandb_community_client.py ./backend/app/services/
+COPY backend/scripts/__init__.py backend/scripts/seed_ofd_cache.py backend/scripts/seed_spoolmandb_community_cache.py ./backend/scripts/
 
-# Bake a build-time SpoolmanDB-Community snapshot into the image, so a
-# brand-new self-hosted/air-gapped deployment has barcode coverage from
-# first boot instead of an empty cache with nothing to fall back to (see
-# spoolmandb_community_client.py's `_load_seed_cache` and the script's own
-# docstring). Never fails the build - a network hiccup here just means the
-# image ships without a seed, same as before this existed.
 RUN python -m backend.scripts.seed_spoolmandb_community_cache || true
-
-# Same for OFD (see ofd_client.py's `_load_seed_cache` and the script's own
-# docstring) - both community filament databases are MIT-licensed, data
-# included, so bundling a snapshot of either is clean.
 RUN python -m backend.scripts.seed_ofd_cache || true
+
+# Copy backend - separate from the minimal subset above, see comment there.
+COPY backend/ ./backend/
 
 # Capture the current git branch at build time. `.git/HEAD` is the only
 # .git metadata the build context lets through (see .dockerignore); it
