@@ -230,17 +230,19 @@ async def _translate_spoolman_errors():
         raise HTTPException(status_code=503, detail="Spoolman server is not reachable") from exc
 
 
-async def _resolve_linked_codes_json(barcode: str) -> str | None:
+async def _resolve_linked_codes_json(barcode: str, settings: dict[str, str]) -> str | None:
     """Cross-reference `barcode` against OFD/SpoolmanDB-Community and return the
     discovered code bundle JSON-encoded for extra.bambu_linked_codes, or None
     if nothing was found. Mirrors `_persist_barcode_codes_for_spool`'s
-    cross-referencing for the local-DB inventory mode (see `routes/inventory.py`)."""
+    cross-referencing for the local-DB inventory mode (see `routes/inventory.py`).
+    Honors `barcode_lookup_enabled` via `_external_all_codes` — callers don't
+    need their own gate check."""
     from backend.app.api.routes.inventory import _external_all_codes
     from backend.app.schemas.spool import classify_code
 
     code, kind = classify_code(barcode)
     try:
-        external = await _external_all_codes(code, kind)
+        external = await _external_all_codes(code, kind, settings)
     except Exception:
         logger.warning("Cross-reference lookup failed for Spoolman barcode %s", barcode, exc_info=True)
         external = None
@@ -620,7 +622,9 @@ async def create_spool(
         if data.barcode is not None:
             new_extra["bambu_barcode"] = json.dumps(data.barcode)
             if data.barcode:
-                linked_json = await _resolve_linked_codes_json(data.barcode)
+                from backend.app.api.routes.inventory import _load_settings_map
+
+                linked_json = await _resolve_linked_codes_json(data.barcode, await _load_settings_map(db))
                 if linked_json:
                     new_extra["bambu_linked_codes"] = linked_json
         if new_extra:
@@ -926,7 +930,9 @@ async def update_spool(
             new_extra["bambu_barcode"] = json.dumps(data.barcode or "")
             new_extra["bambu_linked_codes"] = json.dumps([])
             if data.barcode:
-                linked_json = await _resolve_linked_codes_json(data.barcode)
+                from backend.app.api.routes.inventory import _load_settings_map
+
+                linked_json = await _resolve_linked_codes_json(data.barcode, await _load_settings_map(db))
                 if linked_json:
                     new_extra["bambu_linked_codes"] = linked_json
         async with _translate_spoolman_errors():

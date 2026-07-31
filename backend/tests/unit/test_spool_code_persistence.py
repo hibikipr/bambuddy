@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.api.routes.inventory import _persist_barcode_codes_for_spool, _persist_spool_codes
+from backend.app.models.settings import Settings
 from backend.app.models.spool import Spool
 from backend.app.models.spool_code import SpoolCode
 
@@ -26,6 +27,9 @@ async def engine():
     async with eng.begin() as conn:
         await conn.run_sync(Spool.__table__.create)
         await conn.run_sync(SpoolCode.__table__.create)
+        # _persist_barcode_codes_for_spool loads barcode_lookup_enabled via
+        # _load_settings_map, which queries this table.
+        await conn.run_sync(Settings.__table__.create)
     yield eng
     await eng.dispose()
 

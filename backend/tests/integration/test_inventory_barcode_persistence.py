@@ -14,6 +14,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.models.settings import Settings
 from backend.app.models.spool_code import SpoolCode
 
 pytestmark = pytest.mark.integration
@@ -328,3 +329,59 @@ class TestBarcodePathParamLengthLimit:
             resp = await async_client.get(f"/api/v1/inventory/barcode/{'1' * 64}")
 
         assert resp.status_code == 200
+
+
+class TestBarcodeLookupDisabledSkipsWritePathExternalCalls:
+    """barcode_lookup_enabled=false must be honored on create/bulk-create too
+    (Martin review round 2) — before this fix, _resolve_codes_for_barcode and
+    _external_all_codes took no settings at all, so saving any spool with a
+    barcode still hit OFD/SpoolmanDB-Community regardless of the toggle."""
+
+    async def test_create_spool_skips_external_lookup_when_disabled(
+        self, async_client: AsyncClient, db_session: AsyncSession
+    ):
+        db_session.add(Settings(key="barcode_lookup_enabled", value="false"))
+        await db_session.commit()
+
+        p1, p2, p3, p4 = _patch_external(ofd_result=({"material": "PLA"}, [{"code": "X", "kind": "sku"}]))
+        with p1 as mock_ofd, p2 as mock_ofd_article, p3 as mock_smdb, p4 as mock_smdb_sku:
+            resp = await async_client.post(
+                "/api/v1/inventory/spools",
+                json={"material": "PLA", "barcode": "06938936716785", "label_weight": 1000},
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["barcode"] == "6938936716785"
+        assert body["linked_codes"] == []
+        mock_ofd.assert_not_called()
+        mock_ofd_article.assert_not_called()
+        mock_smdb.assert_not_called()
+        mock_smdb_sku.assert_not_called()
+
+        codes = await _codes_for(db_session, body["id"])
+        assert {c.code for c in codes} == {"6938936716785"}
+
+    async def test_bulk_create_skips_external_lookup_when_disabled(
+        self, async_client: AsyncClient, db_session: AsyncSession
+    ):
+        db_session.add(Settings(key="barcode_lookup_enabled", value="false"))
+        await db_session.commit()
+
+        p1, p2, p3, p4 = _patch_external(ofd_result=({"material": "PLA"}, [{"code": "X", "kind": "sku"}]))
+        with p1 as mock_ofd, p2 as mock_ofd_article, p3 as mock_smdb, p4 as mock_smdb_sku:
+            resp = await async_client.post(
+                "/api/v1/inventory/spools/bulk",
+                json={"spool": {"material": "PLA", "barcode": "ALZMNTABS01", "label_weight": 1000}, "quantity": 2},
+            )
+
+        assert resp.status_code == 200
+        spools = resp.json()
+        assert len(spools) == 2
+        mock_ofd.assert_not_called()
+        mock_ofd_article.assert_not_called()
+        mock_smdb.assert_not_called()
+        mock_smdb_sku.assert_not_called()
+        for spool in spools:
+            codes = await _codes_for(db_session, spool["id"])
+            assert {c.code for c in codes} == {"ALZMNTABS01"}

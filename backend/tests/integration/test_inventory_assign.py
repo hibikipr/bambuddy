@@ -1358,3 +1358,55 @@ class TestAssignSpoolPfcnCloudPreset:
             # original PFCN (which the slicer needs separately).
             assert call_kwargs.kwargs["tray_info_idx"] == "GFL05"
             assert call_kwargs.kwargs["setting_id"] == "PFCN80e80c1f79db85"
+
+
+class TestListAssignments:
+    """GET /api/v1/inventory/assignments (#Martin review round 2).
+
+    list_assignments' query eager-loads SpoolAssignment.spool + Spool.k_profiles
+    but, before this fix, not Spool.codes — and SpoolResponse.linked_codes reads
+    Spool.codes during pydantic serialization, which 500s under the async engine
+    (MissingGreenlet) as soon as any assignment exists. The POST endpoint's own
+    response query had the same omission but never surfaced it, since the Spool
+    row it re-selects was already loaded with .codes earlier in the same request.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_get_assignments_returns_linked_codes(
+        self, async_client: AsyncClient, printer_factory, spool_factory, db_session: AsyncSession
+    ):
+        from backend.app.models.spool_code import SpoolCode
+
+        printer = await printer_factory(name="H2D")
+        spool = await spool_factory(material="PLA", barcode="6938936716785")
+        db_session.add_all(
+            [
+                SpoolCode(spool_id=spool.id, code="6938936716785", kind="gtin", is_primary=True),
+                SpoolCode(spool_id=spool.id, code="ALZMNTABS01", kind="sku", is_primary=False),
+            ]
+        )
+        await db_session.commit()
+
+        mock_client = MagicMock()
+        mock_client.ams_set_filament_setting.return_value = True
+        mock_client.extrusion_cali_sel.return_value = True
+        status = _make_mock_status(ams_data=[{"id": 2, "tray": [{"id": 3, "tray_info_idx": "", "tray_type": "PLA"}]}])
+
+        with patch("backend.app.services.printer_manager.printer_manager") as mock_pm:
+            mock_pm.get_client.return_value = mock_client
+            mock_pm.get_status.return_value = status
+
+            assign_response = await async_client.post(
+                "/api/v1/inventory/assignments",
+                json={"spool_id": spool.id, "printer_id": printer.id, "ams_id": 2, "tray_id": 3},
+            )
+            assert assign_response.status_code == 200
+
+            response = await async_client.get("/api/v1/inventory/assignments")
+
+        assert response.status_code == 200
+        body = response.json()
+        assert len(body) == 1
+        linked_codes = body[0]["spool"]["linked_codes"]
+        assert linked_codes == [{"code": "ALZMNTABS01", "kind": "sku", "is_refill": False}]

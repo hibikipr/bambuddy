@@ -1319,12 +1319,13 @@ async def import_spools_csv(
         await db.commit()
         # Resolve each distinct barcode's external cross-reference once, not
         # once per row — an import can have many rows sharing one barcode.
+        settings = await _load_settings_map(db)
         codes_by_barcode: dict[str, tuple[str, str, list[dict]]] = {}
         for spool, barcode in created_spools:
             if not barcode:
                 continue
             if barcode not in codes_by_barcode:
-                codes_by_barcode[barcode] = await _resolve_codes_for_barcode(barcode)
+                codes_by_barcode[barcode] = await _resolve_codes_for_barcode(barcode, settings)
             code, kind, all_codes = codes_by_barcode[barcode]
             await _persist_spool_codes(db, spool.id, code, kind, all_codes)
         await ws_manager.broadcast({"type": "inventory_changed"})
@@ -1441,7 +1442,8 @@ async def bulk_create_spools(
     if payload.get("barcode"):
         # All spools in a bulk-create batch share one barcode — resolve the
         # external cross-reference once, not once per spool.
-        code, kind, all_codes = await _resolve_codes_for_barcode(payload["barcode"])
+        settings = await _load_settings_map(db)
+        code, kind, all_codes = await _resolve_codes_for_barcode(payload["barcode"], settings)
         for spool_id in ids:
             await _persist_spool_codes(db, spool_id, code, kind, all_codes)
     result = await db.execute(
@@ -1463,7 +1465,7 @@ _BARCODE_FIELD_KEYS = (
 )
 
 
-async def _external_all_codes(code: str, kind: str) -> tuple[dict, str, list[dict]] | None:
+async def _external_all_codes(code: str, kind: str, settings: dict[str, str]) -> tuple[dict, str, list[dict]] | None:
     """Cross-reference OFD and SpoolmanDB-Community for `code`, merging both hits.
 
     Returns (fields, source, all_codes) where `source` is whichever database
@@ -1473,7 +1475,13 @@ async def _external_all_codes(code: str, kind: str) -> tuple[dict, str, list[dic
     SKU/article number) discovered across both databases. If only one
     database resolves `code` directly, its sibling codes are also probed
     against the *other* database to recover cross-referenced fields/codes.
+
+    Honors `barcode_lookup_enabled` (same setting `_resolve_barcode` gates
+    on) — returns None without touching either external database when it's
+    off, so the write paths below don't defeat the opt-out.
     """
+    if settings.get("barcode_lookup_enabled", "true") != "true":
+        return None
 
     async def _ofd_lookup(c: str, k: str) -> tuple[dict, list[dict]] | None:
         return await (ofd_client.lookup(c) if k == "gtin" else ofd_client.lookup_article(c))
@@ -1607,7 +1615,7 @@ async def _resolve_barcode(
     if not lookup_enabled:
         return {}, None, []
 
-    external = await _external_all_codes(code, kind)
+    external = await _external_all_codes(code, kind, settings)
     if external is None:
         return {}, None, []
     return external
@@ -1638,17 +1646,18 @@ async def _persist_spool_codes(
     await db.commit()
 
 
-async def _resolve_codes_for_barcode(barcode: str) -> tuple[str, str, list[dict]]:
+async def _resolve_codes_for_barcode(barcode: str, settings: dict[str, str]) -> tuple[str, str, list[dict]]:
     """Classify `barcode` and cross-reference it externally, returning
     `(canonical_code, kind, sibling_codes)`. Swallows lookup failures — a spool
     still gets created/imported with just its primary code if the external
     databases are unreachable. `_external_all_codes` reads the 24h-cached
     in-memory index, not the network, so batch callers should resolve once per
     unique barcode rather than once per row/spool, but a repeat call for the
-    same barcode is cheap either way."""
+    same barcode is cheap either way. Honors `barcode_lookup_enabled` via
+    `_external_all_codes` — callers don't need their own gate check."""
     code, kind = classify_code(barcode)
     try:
-        external = await _external_all_codes(code, kind)
+        external = await _external_all_codes(code, kind, settings)
     except Exception:
         logger.warning("Cross-reference lookup failed while resolving codes for barcode %s", barcode, exc_info=True)
         external = None
@@ -1670,7 +1679,8 @@ async def _persist_barcode_codes_for_spool(db: AsyncSession, spool_id: int, barc
     if not barcode:
         await db.commit()
         return
-    code, kind, all_codes = await _resolve_codes_for_barcode(barcode)
+    settings = await _load_settings_map(db)
+    code, kind, all_codes = await _resolve_codes_for_barcode(barcode, settings)
     await _persist_spool_codes(db, spool_id, code, kind, all_codes)
 
 
@@ -2125,6 +2135,7 @@ async def list_assignments(
 
     query = select(SpoolAssignment).options(
         selectinload(SpoolAssignment.spool).selectinload(Spool.k_profiles),
+        selectinload(SpoolAssignment.spool).selectinload(Spool.codes),
         selectinload(SpoolAssignment.printer),
     )
     if printer_id is not None:
@@ -2167,7 +2178,12 @@ async def list_assignments(
     # Build response objects, attaching ams_label where available
     responses: list[SpoolAssignmentResponse] = []
     for a in assignments:
-        resp = SpoolAssignmentResponse.model_validate(a)
+        # from_attributes=True must be passed here explicitly, not just set on
+        # SpoolAssignmentResponse's own Config — Config-only from_attributes
+        # doesn't cascade into nested BaseModel fields lacking their own
+        # from_attributes (LinkedCode), and raises a validation error instead
+        # of reading Spool.linked_codes as attributes.
+        resp = SpoolAssignmentResponse.model_validate(a, from_attributes=True)
         sn = serial_map.get((a.printer_id, a.ams_id))
         if sn and sn in label_by_serial:
             resp.ams_label = label_by_serial[sn]
@@ -2345,12 +2361,14 @@ async def assign_spool(
         select(SpoolAssignment)
         .options(
             selectinload(SpoolAssignment.spool).selectinload(Spool.k_profiles),
+            selectinload(SpoolAssignment.spool).selectinload(Spool.codes),
             selectinload(SpoolAssignment.printer),
         )
         .where(SpoolAssignment.id == assignment.id)
     )
     resp = result.scalar_one()
-    response = SpoolAssignmentResponse.model_validate(resp)
+    # See the from_attributes note in list_assignments above.
+    response = SpoolAssignmentResponse.model_validate(resp, from_attributes=True)
     response.configured = configured
     response.pending_config = pending_config
 

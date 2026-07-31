@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.models.color_catalog import ColorCatalogEntry
+from backend.app.models.settings import Settings
 from backend.app.models.spool import Spool
 from backend.app.models.spool_code import SpoolCode
 
@@ -675,6 +676,34 @@ class TestInventoryCsvImportPersistsSpoolCodes:
             codes = (await db_session.execute(select(SpoolCode).where(SpoolCode.spool_id == spool.id))).scalars().all()
             assert len(codes) == 1
             assert codes[0].code == "ALZMNTABS01"
+
+    async def test_lookup_disabled_skips_external_calls(self, async_client: AsyncClient, db_session: AsyncSession):
+        """barcode_lookup_enabled=false must be honored on CSV import too
+        (Martin review round 2) — _resolve_codes_for_barcode previously took
+        no settings at all, so an import still hit OFD/SpoolmanDB-Community
+        regardless of the toggle."""
+        db_session.add(Settings(key="barcode_lookup_enabled", value="false"))
+        await db_session.commit()
+        csv_text = "material,barcode\nPLA,ALZMNTABS01\n"
+
+        with (
+            patch("backend.app.services.ofd_client.lookup", new=AsyncMock()) as mock_ofd,
+            patch("backend.app.services.ofd_client.lookup_article", new=AsyncMock()) as mock_ofd_article,
+            patch("backend.app.services.spoolmandb_community_client.lookup", new=AsyncMock()) as mock_smdb,
+            patch("backend.app.services.spoolmandb_community_client.lookup_sku", new=AsyncMock()) as mock_smdb_sku,
+        ):
+            response = await async_client.post("/api/v1/inventory/spools/import", files=_csv_upload(csv_text))
+
+        assert response.status_code == 200, response.text
+        assert response.json()["created"] == 1
+        mock_ofd.assert_not_called()
+        mock_ofd_article.assert_not_called()
+        mock_smdb.assert_not_called()
+        mock_smdb_sku.assert_not_called()
+
+        spool = (await db_session.execute(select(Spool))).scalars().one()
+        codes = (await db_session.execute(select(SpoolCode).where(SpoolCode.spool_id == spool.id))).scalars().all()
+        assert {c.code for c in codes} == {"ALZMNTABS01"}
 
 
 @pytest.mark.asyncio

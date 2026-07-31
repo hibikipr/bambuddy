@@ -1461,6 +1461,69 @@ class TestBarcodePassthrough:
         ]
         assert barcode_calls == []
 
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_create_skips_external_lookup_when_disabled(
+        self,
+        async_client: AsyncClient,
+        spoolman_settings,
+        mock_spoolman_client,
+        db_session,
+    ):
+        """barcode_lookup_enabled=false must be honored on the Spoolman create
+        path too (Martin review round 2) — _resolve_linked_codes_json
+        previously took no settings at all, so it still hit OFD/
+        SpoolmanDB-Community regardless of the toggle."""
+        from backend.app.models.settings import Settings
+
+        db_session.add(Settings(key="barcode_lookup_enabled", value="false"))
+        await db_session.commit()
+
+        with (
+            patch("backend.app.services.ofd_client.lookup", new=AsyncMock()) as mock_ofd,
+            patch("backend.app.services.ofd_client.lookup_article", new=AsyncMock()) as mock_ofd_article,
+            patch("backend.app.services.spoolmandb_community_client.lookup", new=AsyncMock()) as mock_smdb,
+            patch("backend.app.services.spoolmandb_community_client.lookup_sku", new=AsyncMock()) as mock_smdb_sku,
+        ):
+            payload = {"material": "PLA", "label_weight": 1000, "weight_used": 0, "barcode": "06938936716785"}
+            response = await async_client.post("/api/v1/spoolman/inventory/spools", json=payload)
+
+        assert response.status_code == 200
+        mock_ofd.assert_not_called()
+        mock_ofd_article.assert_not_called()
+        mock_smdb.assert_not_called()
+        mock_smdb_sku.assert_not_called()
+
+    @pytest.mark.asyncio
+    @pytest.mark.integration
+    async def test_update_skips_external_lookup_when_disabled(
+        self,
+        async_client: AsyncClient,
+        spoolman_settings,
+        mock_spoolman_client,
+        db_session,
+    ):
+        from backend.app.models.settings import Settings
+
+        db_session.add(Settings(key="barcode_lookup_enabled", value="false"))
+        await db_session.commit()
+
+        with (
+            patch("backend.app.services.ofd_client.lookup", new=AsyncMock()) as mock_ofd,
+            patch("backend.app.services.ofd_client.lookup_article", new=AsyncMock()) as mock_ofd_article,
+            patch("backend.app.services.spoolmandb_community_client.lookup", new=AsyncMock()) as mock_smdb,
+            patch("backend.app.services.spoolmandb_community_client.lookup_sku", new=AsyncMock()) as mock_smdb_sku,
+        ):
+            response = await async_client.patch(
+                "/api/v1/spoolman/inventory/spools/42", json={"barcode": "6938936716785"}
+            )
+
+        assert response.status_code == 200
+        mock_ofd.assert_not_called()
+        mock_ofd_article.assert_not_called()
+        mock_smdb.assert_not_called()
+        mock_smdb_sku.assert_not_called()
+
 
 class TestSpoolmanInventoryAuth:
     """Write/delete endpoints require INVENTORY_UPDATE when auth is enabled."""
