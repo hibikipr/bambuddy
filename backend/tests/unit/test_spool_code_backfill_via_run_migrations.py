@@ -80,10 +80,17 @@ async def _codes_for(engine, spool_id: int) -> list[tuple]:
         return result.all()
 
 
-async def test_backfill_runs_through_full_migration_sequence():
+async def test_backfill_runs_through_full_migration_sequence(monkeypatch):
     """Covers the ordering dependency: spool.barcode and spool_code both need
     to exist by the time the backfill step runs, within one run_migrations
     pass on a schema that predates both."""
+    # Pin the SQLite branch regardless of the ambient DATABASE_URL — this test
+    # always drives run_migrations against a hand-built SQLite engine, but
+    # is_sqlite() reads the *configured* database_url, not the engine actually
+    # in use. Without this, a Postgres dev/CI environment takes the Postgres
+    # branch (e.g. the color_catalog.hex_color ALTER COLUMN) against a SQLite
+    # connection and fails.
+    monkeypatch.setattr("backend.app.core.database.is_sqlite", lambda: True)
     engine = await _engine()
     try:
         await _insert_spool_via_orm(engine, spool_id=1, barcode="6938936716785")
@@ -103,7 +110,8 @@ async def test_backfill_runs_through_full_migration_sequence():
         await engine.dispose()
 
 
-async def test_backfill_through_run_migrations_is_idempotent():
+async def test_backfill_through_run_migrations_is_idempotent(monkeypatch):
+    monkeypatch.setattr("backend.app.core.database.is_sqlite", lambda: True)
     engine = await _engine()
     try:
         await _insert_spool_via_orm(engine, spool_id=1, barcode="6938936716785")
