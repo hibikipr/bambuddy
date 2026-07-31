@@ -890,6 +890,8 @@ export default {
       uploadedBy: '업로드한 사용자',
       noPermissionReprint: '재인쇄 권한이 없습니다',
       noFileForReprint: '3MF 파일 없음 — 인쇄 기록 시 프린터에서 파일을 다운로드할 수 없었습니다',
+      slicerAmsMapping: 'AMS 매핑 저장됨({{printer}})',
+      slicerAmsMappingTooltip: '슬라이서가 선택한 AMS 슬롯이 {{printer}}용으로 저장되었습니다. 슬롯 번호는 해당 프린터에서만 의미가 있으므로, 다시 {{printer}}로 보낼 때만 재인쇄에서 재사용됩니다.',
       noPermissionEdit: '아카이브를 편집할 권한이 없습니다',
       noPermissionDelete: '아카이브를 삭제할 권한이 없습니다',
       openInBambuStudio: '슬라이서에서 열기',
@@ -1349,7 +1351,11 @@ export default {
       lineItem: '슬롯 {{slot}}: {{required}}g 필요, {{remaining}}g 남음',
       unknown: '알 수 없음',
       printAnyway: '그냥 인쇄'
-    }
+    },
+    slicerAmsMapping: {
+      rowBadge: '이 프린터용으로 저장된 AMS 슬롯',
+      rowTooltip: '이 아카이브에는 슬라이서가 선택한 정확한 AMS 슬롯이 이 항목의 대상 프린터용으로 저장되어 있습니다. 해당 프린터에서 재인쇄하면 유형과 색상으로 다시 맞추는 대신 그 트레이를 재사용할 수 있습니다.',
+    },
   },
   stats: {
     title: '대시보드',
@@ -2112,6 +2118,8 @@ export default {
     slicerCard: '슬라이서',
     orcaslicerApiUrl: 'OrcaSlicer 사이드카 URL',
     bambuStudioApiUrl: 'Bambu Studio 사이드카 URL',
+    slicerStallTimeout: '슬라이서 정지 시간 제한(분)',
+    slicerStallTimeoutDescription: '사이드카에서 이 시간 동안 진행 상황이 없으면 슬라이싱을 중단합니다. 진행 상황을 계속 보고하는 무거운 모델은 아무리 오래 걸려도 중단되지 않습니다. 진행 상황을 보고하지 않는 사이드카에서는 이 값이 전체 시간 제한으로 사용됩니다.',
     slicerApiUrlDescription: '슬라이서 API 사이드카 컨테이너의 URL. SLICER_API_URL / BAMBU_STUDIO_API_URL 환경 변수 기본값을 사용하려면 비워두세요.',
     slicerBundlesRemoved: {
       title: '슬라이서 번들 (제거됨)',
@@ -2697,6 +2705,7 @@ export default {
     title: '오류 - {{name}}',
     noErrors: '오류 없음',
     viewOnWiki: 'Bambu Lab 위키에서 보기',
+    mqttVerifyFailedRemedy: '프린터에서 개발자 모드를 활성화하고 프린터를 재시작한 다음 작업을 다시 시작하세요.',
     unknownCode: '알 수 없는 HMS 코드 — 자세한 내용은 Bambu Lab 위키를 참조하세요.',
     clearInstructions: '오류를 해제하려면 프린터에서 오류를 지우세요.',
     clearErrors: '오류 지우기',
@@ -4438,6 +4447,10 @@ export default {
     selectPrinter: '프린터 선택',
     selectPlate: '플레이트 선택',
     filamentMapping: '필라멘트 매핑',
+    useArchiveMapping: '매핑',
+    useArchiveMappingTooltip: '유형/색상으로 매칭하는 대신, 이 아카이브에 저장된 AMS 매핑(슬라이서 제공)에서 모든 슬롯을 선택합니다.',
+    clickToChangeSlot: '클릭하여 슬롯 할당 변경',
+    reRead: '다시 읽기',
     plateN: '플레이트 {{n}}',
     plateFilamentsUnreadable: '선택한 플레이트의 필라멘트를 읽을 수 없어 매핑할 수 없습니다. 해당 플레이트를 선택 해제하면 나머지를 대기열에 추가할 수 있습니다.',
     totalCost: '총 비용:',
@@ -4543,7 +4556,8 @@ export default {
     noPrintersConnected: '연결된 프린터 없음',
     printersConnected: '{{total}}개 중 {{connected}}개 연결됨',
     cloudProfiles: '클라우드 프로필',
-    cloudProfilesDescription: 'Bambu 클라우드의 필라멘트, 프린터 및 프로세스 프리셋',
+    cloudProfilesDescription: 'Bambu 클라우드와 Orca 클라우드의 필라멘트, 프린터 및 프로세스 프리셋',
+    cloudProfilesAccounts: '연결된 계정 — Bambu 클라우드: {{bambu}}, Orca 클라우드: {{orca}}',
     appSettings: '앱 설정',
     appSettingsDescription: 'Bambuddy 구성 (전체 데이터베이스)',
     spoolInventory: '스풀 재고',
@@ -4924,6 +4938,10 @@ export default {
     queueForceColorMatch: {
       title: '색상 일치 강제',
       description: '정확한 필라멘트 유형과 색상이 장착되지 않은 프린터에는 발송을 거부합니다. 기본적으로 꺼져 있음 — 이 옵션 없이는 대기열이 모델 전용 매칭을 사용하여 잘못된 색상이 장착된 프린터를 선택할 수 있습니다.'
+    },
+    saveAmsMapping: {
+      title: 'AMS 매핑 저장',
+      description: '슬라이서가 직접 선택한 AMS 슬롯(project_file MQTT 명령에서)을 아카이브에 저장하여, 이후 재인쇄 시 파일의 유형/색상에서 다시 유추하지 않고 동일한 실물 스풀을 재사용하도록 합니다. 기본값은 꺼짐입니다.',
     },
     gcodeInjection: {
       title: 'G-code 주입',
@@ -5657,6 +5675,7 @@ export default {
     filteringFor: '필터링 중: {{material}}',
     noKProfile: 'K 프로필 없음 (기본값 0.020 사용)',
     noMatchingKProfiles: '일치하는 K 프로필을 찾을 수 없습니다. 기본값 K=0.020이 사용됩니다.',
+    otherKProfiles: '이 프린터의 다른 K 프로필',
     selectFilamentFirst: '먼저 필라멘트 프로필을 선택하세요',
     kFromCalibration: 'K={{value}} (프린터 보정에서)',
     customColorLabel: '사용자 지정 색상 (선택사항)',
@@ -6043,8 +6062,12 @@ export default {
     description: '자체 호스팅 Obico ML API로 인쇄를 모니터링하고 감지된 실패에 자동으로 조치합니다.',
     mlUrl: 'Obico ML API URL',
     mlUrlHint: '자체 호스팅 Obico ml_api 컨테이너의 기본 URL (예: http://192.168.1.10:3333).',
+    mlToken: 'ML API 토큰 (선택 사항)',
+    mlTokenPlaceholder: '서버가 ML_API_TOKEN 없이 실행 중이면 비워 두세요',
+    mlTokenHint: 'Obico ml_api 컨테이너의 ML_API_TOKEN 환경 변수와 일치해야 합니다. 컨테이너가 토큰 없이 실행 중이면 비워 두세요.',
     test: '테스트',
     testSuccess: 'ML API에 도달 가능하며 정상입니다.',
+    testSuccessTokenUnknown: 'ML API에 도달 가능하며 정상입니다. 토큰은 확인할 수 없었습니다.',
     testFailed: 'ML API에 도달할 수 없습니다.',
     sensitivity: '민감도',
     sensitivityLow: '낮음 (오탐 적음)',
