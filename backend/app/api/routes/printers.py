@@ -67,7 +67,7 @@ from backend.app.services.bambu_ftp import (
 )
 from backend.app.services.hms_actions import HMSAction
 from backend.app.services.pause_eta import next_pause
-from backend.app.services.print_storage import ftp_probe_paths, print_file_reachable_over_ftp
+from backend.app.services.print_storage import ftp_probe_paths, print_file_reachable_over_ftp, printer_file_name
 from backend.app.services.printer_diagnostic import run_connection_diagnostic
 from backend.app.services.printer_file_cache import printer_file_cache
 from backend.app.services.printer_manager import (
@@ -1275,16 +1275,17 @@ async def _produce_cover_image(
     # Bambu printers may store files as "name.gcode.3mf" (sliced via Bambu Studio)
     # or just "name.3mf" (uploaded directly)
     possible_filenames = []
-    if subtask_name.endswith(".3mf"):
-        possible_filenames.append(subtask_name)
+    file_name = printer_file_name(subtask_name)
+    if file_name.endswith(".3mf"):
+        possible_filenames.append(file_name)
     else:
         # Try both naming patterns
-        possible_filenames.append(f"{subtask_name}.gcode.3mf")
-        possible_filenames.append(f"{subtask_name}.3mf")
+        possible_filenames.append(f"{file_name}.gcode.3mf")
+        possible_filenames.append(f"{file_name}.3mf")
 
     # Also try with spaces converted to underscores (Bambu Studio may normalize filenames)
-    if " " in subtask_name:
-        normalized = subtask_name.replace(" ", "_")
+    if " " in file_name:
+        normalized = file_name.replace(" ", "_")
         if normalized.endswith(".3mf"):
             possible_filenames.append(normalized)
         else:
@@ -4220,15 +4221,16 @@ async def get_printable_objects(
 
             # Build possible 3MF filenames (try both .gcode.3mf and .3mf)
             possible_filenames = []
-            if subtask_name.endswith(".3mf"):
-                possible_filenames.append(subtask_name)
+            file_name = printer_file_name(subtask_name)
+            if file_name.endswith(".3mf"):
+                possible_filenames.append(file_name)
             else:
-                possible_filenames.append(f"{subtask_name}.gcode.3mf")
-                possible_filenames.append(f"{subtask_name}.3mf")
+                possible_filenames.append(f"{file_name}.gcode.3mf")
+                possible_filenames.append(f"{file_name}.3mf")
 
             # Also try with spaces converted to underscores (Bambu Studio may normalize filenames)
-            if " " in subtask_name:
-                normalized = subtask_name.replace(" ", "_")
+            if " " in file_name:
+                normalized = file_name.replace(" ", "_")
                 if normalized.endswith(".3mf"):
                     possible_filenames.append(normalized)
                 else:

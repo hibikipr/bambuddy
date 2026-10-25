@@ -55,6 +55,14 @@ _EXTERNAL_STORAGE_SCHEME = "ftp"
 # downloadable over FTPS.
 _LOCAL_FILE_SCHEME = "file"
 
+# A cloud print's project_file names where the printer *downloads* the job from,
+# a Bambu Cloud S3 link (``https://or-cloud-upload-prod.s3...amazonaws.com/
+# .../<id>.3mf?X-Amz-...``), echoed on the report topic since #1820. That says
+# nothing about where the file is kept -- measured on an H2C (firmware
+# 01.02.00.00), it lands in ``/cache/<subtask>.gcode.3mf``, served over FTPS --
+# so it is no evidence either way and must not read as internal storage (#3382).
+_DOWNLOAD_SOURCE_SCHEMES = ("http", "https")
+
 # Internal roots seen in ``file://`` paths. ``/userdata`` is where the model
 # cache lives (``/userdata/model/history/<name>``, confirmed via the printer's
 # own file listing), and port 990 does not serve it.
@@ -148,6 +156,8 @@ def url_is_external_storage(project_url: str | None) -> bool | None:
     scheme = scheme.lower()
     if scheme == _EXTERNAL_STORAGE_SCHEME:
         return True
+    if scheme in _DOWNLOAD_SOURCE_SCHEMES:
+        return None
     if scheme == _LOCAL_FILE_SCHEME:
         # Only a known-internal path is positive evidence of somewhere FTPS
         # cannot reach. Anything else is unknown, which sweeps -- this module
@@ -197,6 +207,21 @@ def probe_filename_from_url(project_url: str | None) -> str | None:
     if not name.lower().endswith(".3mf"):
         return None
     return name
+
+
+def printer_file_name(subtask_name: str) -> str:
+    """The name the printer stores a print called *subtask_name* under.
+
+    A print's name can hold a ``/``, which no file name can, and the printer
+    writes it as ``2f`` -- its percent-encoding without the ``%``. Measured on
+    an H2C (firmware 01.02.00.00): a Bambu Cloud print named
+    ``CLICKER VERSION OREO / LOVE`` was stored as
+    ``/cache/CLICKER VERSION OREO 2f LOVE.gcode.3mf``, while the ``%`` and
+    ``,`` of ``0.2mm layer, 2 walls, 15% infill`` were kept as they were. Built
+    from the raw name, every candidate path pointed into a directory that does
+    not exist, and the local temp path did the same on Bambuddy's side.
+    """
+    return subtask_name.replace("/", "2f")
 
 
 def ftp_probe_paths(filename: str) -> list[str]:
