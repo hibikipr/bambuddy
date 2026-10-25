@@ -148,6 +148,7 @@ from backend.app.services.print_storage import (
     external_storage_present,
     ftp_probe_paths,
     print_file_reachable_over_ftp,
+    printer_file_name,
 )
 from backend.app.services.printer_manager import (
     init_printer_connections,
@@ -4134,11 +4135,13 @@ async def try_recover_fallback_archive(printer_id: int, name: str, path: Path, *
     # Callers here arrive with whichever variant their own path produced, so
     # match on the same normalization the download cache uses rather than on an
     # exact string; that is what makes "Desktop_Goose.gcode.3mf" from the cover
-    # endpoint find an archive registered under "Desktop_Goose".
-    wanted = normalize_3mf_name(name)
+    # endpoint find an archive registered under "Desktop_Goose". The raw names
+    # also go through printer_file_name, since a downloaded file carries the
+    # printer's spelling of a "/" in the name and the key carries the "/".
+    wanted = normalize_3mf_name(printer_file_name(name))
     archive_id = None
     for (key_printer_id, key_name), value in list(_active_prints.items()):
-        if key_printer_id == printer_id and normalize_3mf_name(key_name) == wanted:
+        if key_printer_id == printer_id and normalize_3mf_name(printer_file_name(key_name)) == wanted:
             archive_id = value
             break
     if archive_id is None:
@@ -5439,11 +5442,11 @@ async def on_print_start(printer_id: int, data: dict):
                 # A print started from the printer's own screen reports the
                 # file's full name, extension included. That is the file, so
                 # no extension is appended to it (#3009).
-                possible_names.append(subtask_name)
+                possible_names.append(printer_file_name(subtask_name))
             else:
                 # Try common Bambu naming patterns
-                possible_names.append(f"{subtask_name}.gcode.3mf")
-                possible_names.append(f"{subtask_name}.3mf")
+                possible_names.append(f"{printer_file_name(subtask_name)}.gcode.3mf")
+                possible_names.append(f"{printer_file_name(subtask_name)}.3mf")
 
         # Try original filename with .3mf extension
         if filename:
@@ -8263,7 +8266,7 @@ async def _recover_fallback_from_cache_before_eviction(printer_id: int, data: di
     ]
     for name in names:
         try:
-            cached = get_cached_3mf(printer_id, name)
+            cached = get_cached_3mf(printer_id, printer_file_name(name))
             # The print has ended: its completion prices the archive, so no
             # print-start estimate is scheduled to race it.
             if cached and await try_recover_fallback_archive(printer_id, name, cached, price=False):

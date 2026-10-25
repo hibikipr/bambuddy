@@ -199,6 +199,21 @@ def probe_filename_from_url(project_url: str | None) -> str | None:
     return name
 
 
+def printer_file_name(subtask_name: str) -> str:
+    """The name the printer stores a print called *subtask_name* under.
+
+    A print's name can hold a ``/``, which no file name can, and the printer
+    writes it as ``2f`` -- its percent-encoding without the ``%``. Measured on
+    an H2C (firmware 01.02.00.00): a Bambu Cloud print named
+    ``CLICKER VERSION OREO / LOVE`` was stored as
+    ``/cache/CLICKER VERSION OREO 2f LOVE.gcode.3mf``, while the ``%`` and
+    ``,`` of ``0.2mm layer, 2 walls, 15% infill`` were kept as they were. Built
+    from the raw name, every candidate path pointed into a directory that does
+    not exist, and the local temp path did the same on Bambuddy's side.
+    """
+    return subtask_name.replace("/", "2f")
+
+
 def ftp_probe_paths(filename: str) -> list[str]:
     """Remote paths to try for *filename*, best first.
 

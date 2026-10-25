@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 import secrets
+import time
 import zipfile
 from pathlib import Path
 
@@ -67,7 +68,7 @@ from backend.app.services.bambu_ftp import (
 )
 from backend.app.services.hms_actions import HMSAction
 from backend.app.services.pause_eta import next_pause
-from backend.app.services.print_storage import ftp_probe_paths, print_file_reachable_over_ftp
+from backend.app.services.print_storage import ftp_probe_paths, print_file_reachable_over_ftp, printer_file_name
 from backend.app.services.printer_diagnostic import run_connection_diagnostic
 from backend.app.services.printer_file_cache import printer_file_cache
 from backend.app.services.printer_manager import (
@@ -1093,7 +1094,23 @@ _cover_cache: dict[int, dict[tuple[str, str], bytes]] = {}
 # (file sliced on SD card, not on printer storage), remember the failure so the
 # next request short-circuits to 404 instead of re-hammering FTP 8 paths deep.
 # Cleared on print start alongside _cover_cache.
-_cover_404_cache: dict[int, set[tuple[str, str]]] = {}
+#
+# Maps each miss to when it may be retried: ``None`` for a miss that holds for
+# the whole print (no thumbnail in the 3MF, or storage the printer says FTPS
+# cannot read), a ``time.monotonic()`` deadline for a sweep that found no file.
+# That one is not final. A print started from Bambu Cloud reaches the printer
+# as a job, and the printer downloads its 3MF into /cache while the print is
+# already reported as started -- a cover asked for in that window found nothing,
+# and before this deadline existed that miss was replayed until the print ended,
+# with the file sitting at /cache/<name> the whole time (measured on an H2C,
+# firmware 01.02.00.00).
+_cover_404_cache: dict[int, dict[tuple[str, str], float | None]] = {}
+
+# How long a sweep that found no file is believed before the next request looks
+# again. Long enough that a dashboard refreshing every few seconds costs one
+# sweep per window rather than one per refresh (#1420); short enough that a
+# cloud print's cover shows up within a couple of minutes of its file landing.
+_COVER_MISS_RETRY_SECONDS = 120.0
 
 # In-flight cover downloads, keyed by (printer_id, subtask_name, view_key) (#2572).
 # The farm dashboard mounts a cover tile per printer card, so several browsers
@@ -1103,6 +1120,25 @@ _cover_404_cache: dict[int, set[tuple[str, str]]] = {}
 # first request to miss becomes the leader; concurrent requests await its future
 # and then serve from the positive/negative cache it filled.
 _cover_inflight: dict[tuple[int, str, str], asyncio.Future] = {}
+
+
+def _remember_cover_miss(printer_id: int, cache_key: tuple[str, str], retry_after: float | None = None) -> None:
+    """Record a cover miss: for the rest of the print, or for *retry_after* seconds."""
+    _cover_404_cache.setdefault(printer_id, {})[cache_key] = (
+        None if retry_after is None else time.monotonic() + retry_after
+    )
+
+
+def _cover_miss_cached(printer_id: int, cache_key: tuple[str, str]) -> bool:
+    """Is there a miss for this cover that has not yet run out? Drops one that has."""
+    misses = _cover_404_cache.get(printer_id)
+    if not misses or cache_key not in misses:
+        return False
+    retry_at = misses[cache_key]
+    if retry_at is not None and time.monotonic() >= retry_at:
+        del misses[cache_key]
+        return False
+    return True
 
 
 def clear_cover_cache(printer_id: int) -> None:
@@ -1209,7 +1245,7 @@ async def get_printer_cover(
     # Negative-cache short-circuit (#1420): if a prior lookup for this same
     # subtask + view already failed, don't replay 8 FTP retries on every page
     # refresh. _cover_404_cache is cleared on print start.
-    if printer_id in _cover_404_cache and cache_key in _cover_404_cache[printer_id]:
+    if _cover_miss_cached(printer_id, cache_key):
         raise HTTPException(404, f"No cover available for '{subtask_name}' (cached)")
 
     # Coalesce concurrent downloads for the same cover (#2572). The positive and
@@ -1226,7 +1262,7 @@ async def get_printer_cover(
             pass
         if printer_id in _cover_cache and cache_key in _cover_cache[printer_id]:
             return Response(content=_cover_cache[printer_id][cache_key], media_type="image/png")
-        if printer_id in _cover_404_cache and cache_key in _cover_404_cache[printer_id]:
+        if _cover_miss_cached(printer_id, cache_key):
             raise HTTPException(404, f"No cover available for '{subtask_name}' (cached)")
         # Leader finished without filling either cache (a transient 503) — fall
         # through and try the download ourselves.
@@ -1266,7 +1302,7 @@ async def _produce_cover_image(
     Split out of ``get_printer_cover`` so concurrent requests for the same cover
     can single-flight through it (see ``_cover_inflight``). Returns the PNG bytes
     on success (also filling ``_cover_cache``) and raises ``HTTPException`` on
-    failure (filling ``_cover_404_cache`` for the definitive 404s). Does no DB
+    failure (filling ``_cover_404_cache`` for its 404s). Does no DB
     work — the caller already released the pooled connection before this runs,
     which is also why ``archive_path`` arrives resolved rather than looked up
     here.
@@ -1275,16 +1311,17 @@ async def _produce_cover_image(
     # Bambu printers may store files as "name.gcode.3mf" (sliced via Bambu Studio)
     # or just "name.3mf" (uploaded directly)
     possible_filenames = []
-    if subtask_name.endswith(".3mf"):
-        possible_filenames.append(subtask_name)
+    file_name = printer_file_name(subtask_name)
+    if file_name.endswith(".3mf"):
+        possible_filenames.append(file_name)
     else:
         # Try both naming patterns
-        possible_filenames.append(f"{subtask_name}.gcode.3mf")
-        possible_filenames.append(f"{subtask_name}.3mf")
+        possible_filenames.append(f"{file_name}.gcode.3mf")
+        possible_filenames.append(f"{file_name}.3mf")
 
     # Also try with spaces converted to underscores (Bambu Studio may normalize filenames)
-    if " " in subtask_name:
-        normalized = subtask_name.replace(" ", "_")
+    if " " in file_name:
+        normalized = file_name.replace(" ", "_")
         if normalized.endswith(".3mf"):
             possible_filenames.append(normalized)
         else:
@@ -1366,7 +1403,7 @@ async def _produce_cover_image(
         max_retries = 2
         if not storage.reachable:
             if not storage.probe_filename:
-                _cover_404_cache.setdefault(printer_id, set()).add(cache_key)
+                _remember_cover_miss(printer_id, cache_key)
                 raise HTTPException(
                     404,
                     f"The print file for '{subtask_name}' is not on storage Bambuddy can read over FTPS "
@@ -1443,8 +1480,13 @@ async def _produce_cover_image(
 
         if not downloaded:
             # Remember this failure so subsequent requests for the same print
-            # skip the 8-path FTP fan-out (#1420).
-            _cover_404_cache.setdefault(printer_id, set()).add(cache_key)
+            # skip the 8-path FTP fan-out (#1420). A probe the printer's own
+            # account of its storage already predicted is final; a plain sweep
+            # that found nothing is retried, since the file may still be on its
+            # way to the printer (see _cover_404_cache).
+            _remember_cover_miss(
+                printer_id, cache_key, retry_after=None if not storage.reachable else _COVER_MISS_RETRY_SECONDS
+            )
             if not storage.reachable:
                 # The probe looked and found nothing, so the printer's own
                 # account of where the file went is the answer after all —
@@ -1571,7 +1613,7 @@ async def _produce_cover_image(
                         _cover_cache[printer_id][(subtask_name, view_key)] = image_data
                         return image_data
 
-            _cover_404_cache.setdefault(printer_id, set()).add(cache_key)
+            _remember_cover_miss(printer_id, cache_key)
             raise HTTPException(404, "No thumbnail found in 3MF file")
         finally:
             zf.close()
@@ -4220,15 +4262,16 @@ async def get_printable_objects(
 
             # Build possible 3MF filenames (try both .gcode.3mf and .3mf)
             possible_filenames = []
-            if subtask_name.endswith(".3mf"):
-                possible_filenames.append(subtask_name)
+            file_name = printer_file_name(subtask_name)
+            if file_name.endswith(".3mf"):
+                possible_filenames.append(file_name)
             else:
-                possible_filenames.append(f"{subtask_name}.gcode.3mf")
-                possible_filenames.append(f"{subtask_name}.3mf")
+                possible_filenames.append(f"{file_name}.gcode.3mf")
+                possible_filenames.append(f"{file_name}.3mf")
 
             # Also try with spaces converted to underscores (Bambu Studio may normalize filenames)
-            if " " in subtask_name:
-                normalized = subtask_name.replace(" ", "_")
+            if " " in file_name:
+                normalized = file_name.replace(" ", "_")
                 if normalized.endswith(".3mf"):
                     possible_filenames.append(normalized)
                 else:
