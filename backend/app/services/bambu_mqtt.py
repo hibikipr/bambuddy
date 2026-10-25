@@ -1048,6 +1048,15 @@ class PrinterState:
     # None means we never saw a dispatch — say nothing, don't guess.
     current_project_url: str | None = None
     last_project_url: str | None = None
+    # Where the print came from, as push_status reports it: "cloud" for a job
+    # sent through Bambu Cloud (Handy, or a slicer's cloud send), "local" for
+    # one sent over the LAN. None until a frame carries it.
+    print_type: str | None = None
+    # How much of the print's file the printer has fetched, 0-100, from
+    # push_status's gcode_file_prepare_percent. A cloud job's 3MF reaches the
+    # printer *after* the print already counts as started, so a lookup at print
+    # start can miss a file that is minutes away (#3382). None until reported.
+    file_prepare_percent: int | None = None
     timelapse: bool = False  # Timelapse recording active
     ipcam: bool = False  # Live view / camera streaming enabled
     wifi_signal: int | None = None  # WiFi signal strength in dBm
@@ -4521,6 +4530,15 @@ class BambuMQTTClient:
                 self.state.current_print = data["subtask_name"]
         if "subtask_id" in data and not refused_start:
             self.state.subtask_id = data["subtask_id"]
+        if isinstance(data.get("print_type"), str):
+            self.state.print_type = data["print_type"]
+        if "gcode_file_prepare_percent" in data:
+            # A string on every firmware seen ("100"); anything unreadable
+            # leaves the last good value rather than inventing one.
+            try:
+                self.state.file_prepare_percent = int(float(data["gcode_file_prepare_percent"]))
+            except (TypeError, ValueError):
+                pass
         if "mc_percent" in data:
             # Billing: retain this frame's latest positive value immediately.
             # A display-side abort may be the very next frame (and may omit

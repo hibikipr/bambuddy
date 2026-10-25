@@ -3925,6 +3925,27 @@ _FALLBACK_3MF_RETRY_DELAYS_SECONDS: tuple[float, ...] = (310.0, 620.0)
 # two cover a printer that stays busy well into the print.
 _FALLBACK_3MF_TRANSFER_RETRY_DELAYS_SECONDS: tuple[float, ...] = (60.0, 240.0, 600.0)
 
+# Retry ladder for a print whose file was not on the printer yet (#3382). A cloud
+# job's 3MF reaches the printer after the print already counts as started, so the
+# print-start sweep can answer 550 for a file that is on its way. The retry first
+# waits for the printer to report the file fetched (see
+# `_wait_for_file_on_printer`), then looks almost at once; the later two cover a
+# printer whose report and file system disagree for a moment.
+_FALLBACK_3MF_NOT_YET_RETRY_DELAYS_SECONDS: tuple[float, ...] = (5.0, 60.0, 240.0)
+
+# How often, and for how long at most, that retry watches the printer's
+# gcode_file_prepare_percent before looking anyway.
+_FILE_PREPARE_POLL_SECONDS = 5.0
+
+# The prepare percent that counts as fetched. Not 100: P1-series printers can
+# stop at 99 and never report 100, which ha-bambulab works around the same way.
+_FILE_PREPARED_PERCENT = 99
+_FILE_PREPARE_WAIT_MAX_SECONDS = 1800.0
+
+# Not a storage verdict and never stored on the archive: only the retry's ladder
+# and log line read it.
+_RETRY_FILE_NOT_YET_ON_PRINTER = "file_not_yet_on_printer"
+
 # printer_id -> the in-flight retry task, so print completion can cancel it.
 _fallback_3mf_retry_tasks: dict[int, asyncio.Task] = {}
 
@@ -4162,6 +4183,33 @@ async def try_recover_fallback_archive(printer_id: int, name: str, path: Path, *
         return False
 
 
+def _file_still_on_its_way(state: object | None) -> bool:
+    """Is there positive evidence the print's file has not reached the printer yet?
+
+    Either the printer says it is still fetching it, or the print came through
+    Bambu Cloud, whose file arrives after the print starts. Without either, a
+    sweep that found nothing stands: the printer said the file is not there,
+    and nothing about that improves with time (#3063).
+    """
+    if state is None:
+        return False
+    percent = getattr(state, "file_prepare_percent", None)
+    if isinstance(percent, int) and percent < _FILE_PREPARED_PERCENT:
+        return True
+    return getattr(state, "print_type", None) == "cloud"
+
+
+async def _wait_for_file_on_printer(printer_id: int) -> None:
+    """Return once the printer reports the print's file fetched, or it is time to look anyway."""
+    deadline = time.monotonic() + _FILE_PREPARE_WAIT_MAX_SECONDS
+    while time.monotonic() < deadline:
+        state = printer_manager.get_status(printer_id)
+        percent = getattr(state, "file_prepare_percent", None) if state is not None else None
+        if not isinstance(percent, int) or percent >= _FILE_PREPARED_PERCENT:
+            return
+        await asyncio.sleep(_FILE_PREPARE_POLL_SECONDS)
+
+
 def _schedule_fallback_3mf_retry(
     printer_id: int,
     archive_id: int,
@@ -4181,15 +4229,19 @@ def _schedule_fallback_3mf_retry(
 
     logger = logging.getLogger(__name__)
     if delays is None:
-        delays = (
-            _FALLBACK_3MF_TRANSFER_RETRY_DELAYS_SECONDS
-            if reason == REASON_FTP_TRANSFER_FAILED
-            else _FALLBACK_3MF_RETRY_DELAYS_SECONDS
-        )
+        if reason == REASON_FTP_TRANSFER_FAILED:
+            delays = _FALLBACK_3MF_TRANSFER_RETRY_DELAYS_SECONDS
+        elif reason == _RETRY_FILE_NOT_YET_ON_PRINTER:
+            delays = _FALLBACK_3MF_NOT_YET_RETRY_DELAYS_SECONDS
+        else:
+            delays = _FALLBACK_3MF_RETRY_DELAYS_SECONDS
 
     async def _retry() -> None:
         from backend.app.models.archive import PrintArchive
         from backend.app.models.printer import Printer
+
+        if reason == _RETRY_FILE_NOT_YET_ON_PRINTER:
+            await _wait_for_file_on_printer(printer_id)
 
         for delay in delays:
             await asyncio.sleep(delay)
@@ -6132,6 +6184,23 @@ async def on_print_start(printer_id: int, data: dict):
                         archive_id=fallback_archive.id,
                         filenames=list(possible_names),
                         reason=no_3mf_reason,
+                    )
+                elif (
+                    storage.reachable
+                    and no_3mf_reason is None
+                    and possible_names
+                    and _file_still_on_its_way(printer_manager.get_status(printer_id))
+                ):
+                    # The sweep found nothing, but the printer is still fetching
+                    # the file, or the job came through Bambu Cloud and its file
+                    # follows the print's start. Look again once it has landed,
+                    # so the archive gets its 3MF whether or not anyone opens the
+                    # printer's cover meanwhile (#3382).
+                    _schedule_fallback_3mf_retry(
+                        printer_id=printer_id,
+                        archive_id=fallback_archive.id,
+                        filenames=list(possible_names),
+                        reason=_RETRY_FILE_NOT_YET_ON_PRINTER,
                     )
 
                 # Send notification without archive data (file not found)
