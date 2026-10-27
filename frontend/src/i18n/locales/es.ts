@@ -7406,6 +7406,7 @@ export default {
       assignToAms: 'Asignar al AMS',
       syncWeight: 'Sincronizar peso',
       addToInventory: 'Añadir al inventario',
+      quickAddFromTag: 'Añade esta bobina con los datos leídos de su etiqueta Bambu. Puedes editarlos más tarde en Bambuddy.',
       assignToAmsTitle: 'Asignar al AMS',
       selectSlot: 'Seleccione una ranura',
       assign: 'Asignar',
