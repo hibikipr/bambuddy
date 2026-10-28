@@ -221,6 +221,30 @@ class TestNfcReaderPoll:
         assert data["sak"] == 0x00
         assert data["tag_type"] == "ntag"
 
+    @pytest.mark.parametrize(
+        "error",
+        [TimeoutError("PN5180 BUSY timeout"), OSError(5, "Input/output error")],
+        ids=["busy-timeout", "spi-error"],
+    )
+    def test_reader_fault_during_bambu_read_still_reports_the_tag(self, pn5180_mod, error, caplog):
+        """A fault in read_bambu_tag() must not escape poll() and stop nfc_poll_loop (#3377)."""
+        from daemon.nfc_reader import NFCReader, NFCState
+
+        reader = NFCReader()
+        reader._nfc = _reader(pn5180_mod, FakeChip(UID_4, sak=0x08))
+        reader._nfc.read_bambu_tag = MagicMock(side_effect=error)
+
+        with caplog.at_level("WARNING", logger="daemon.nfc_reader"):
+            event, data = reader.poll()
+
+        assert event == "tag_detected"
+        assert data["tag_uid"] == UID_4.hex().upper()
+        assert data["tag_type"] == "mifare_classic"
+        # Matched by UID instead; the tag stays present, so it isn't reported again
+        assert data["tray_uuid"] is None
+        assert reader.state == NFCState.TAG_PRESENT
+        assert any("Bambu tag read failed for " + UID_4.hex().upper() in r.getMessage() for r in caplog.records)
+
 
 class TestReadTagDiagnostic:
     """The Read Tag diagnostic has its own activate_type_a() and shows the UID the daemon reports."""
