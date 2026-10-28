@@ -419,10 +419,13 @@ class PN5180:
         self.send_data([0x30, block])
         time.sleep(0.010)
 
-        # Check RX status
+        # Check RX status: 16 bytes and nothing flagged above the length field.
+        # Measured on a SpoolBuddy (#3377): every good read gave exactly 0x010,
+        # while a tag's NAK set bits 15-16 (0x18000) with length 0. A frame
+        # whose status carries any upper bit is treated as a failed read.
         rx_status = self.read_reg(0x13)
         rx_len = rx_status & 0x1FF
-        if rx_len != 16:
+        if rx_len != 16 or rx_status & ~0x1FF:
             return None
 
         return self.read_data(16)

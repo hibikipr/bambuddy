@@ -415,3 +415,38 @@ class TestReadBambuTagBlockRetry:
         reader.mfc_read_block.side_effect = _flaky_reads({4: [None] * mod.BAMBU_READ_ATTEMPTS})
         assert reader.read_bambu_tag(BAMBU_UID) is None
         assert reader.reactivate_card.call_count == mod.BAMBU_READ_ATTEMPTS
+
+
+class TestMfcReadBlockStatus:
+    """mfc_read_block() accepts a frame only when RX_STATUS shows 16 bytes and nothing else (#3377).
+
+    The values are the ones measured on a real SpoolBuddy (PN5180, genuine Bambu tag):
+    every good read gave RX_STATUS 0x010; a tag's NAK gave 0x18000; no answer gave 0.
+    """
+
+    @staticmethod
+    def _reader(mod, rx_status: int):
+        reader = mod.PN5180.__new__(mod.PN5180)
+        reader.write_reg = MagicMock()
+        reader.write_reg_or = MagicMock()
+        reader.set_transceive_mode = MagicMock()
+        reader.send_data = MagicMock()
+        reader.read_reg = MagicMock(return_value=rx_status)
+        reader.read_data = MagicMock(return_value=bytes(range(16)))
+        return reader
+
+    def test_good_read_returns_the_block(self, pn5180_mod):
+        reader = self._reader(pn5180_mod, 0x00000010)
+        assert reader.mfc_read_block(4) == bytes(range(16))
+        reader.read_reg.assert_called_once_with(0x13)
+        reader.read_data.assert_called_once_with(16)
+
+    @pytest.mark.parametrize(
+        "rx_status",
+        [0x00018000, 0x00000000, 0x00000008, 0x00018010, 0x00000210],
+        ids=["tag-nak", "no-answer", "short-frame", "16-bytes-with-error-bits", "16-bytes-with-a-frame-bit"],
+    )
+    def test_anything_but_a_clean_16_byte_frame_is_a_failed_read(self, pn5180_mod, rx_status):
+        reader = self._reader(pn5180_mod, rx_status)
+        assert reader.mfc_read_block(4) is None
+        reader.read_data.assert_not_called()
