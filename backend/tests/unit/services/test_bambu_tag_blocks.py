@@ -34,6 +34,14 @@ class TestDecodeBambuTagBlocks:
             "tray_uuid": "36B6C12DB3DA4A39A50C275F510BD399",
         }
 
+    def test_translucent_colour_keeps_its_alpha(self):
+        """Block 5 is RGBA: a translucent roll's alpha must survive, not be forced opaque."""
+        # Bambu PETG Translucent, Translucent Pink, read on a real SpoolBuddy
+        tray = decode_bambu_tag_blocks({**CYAN_PLA_BASIC, "5": "F9C1BD80E80300000000E03F00000000"})
+        assert tray["tray_color"] == "F9C1BD80"
+        assert tray["tray_weight"] == 1000
+        assert tray["tray_diameter"] == 1.75
+
     def test_lowercase_hex_is_accepted(self):
         lower = {k: v.lower() for k, v in CYAN_PLA_BASIC.items()}
         assert decode_bambu_tag_blocks(lower) == decode_bambu_tag_blocks(CYAN_PLA_BASIC)

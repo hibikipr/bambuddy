@@ -342,6 +342,12 @@ export function SpoolBuddyDashboard() {
         setDisplayedWeight(null);
         setHiddenTagId(null);
         setJustLinkedSpool(null);
+      } else if (displayedTagId === currentTagId) {
+        // The same tag read again can carry what an earlier read missed: a
+        // failed Bambu read sends no tag data or tray UUID. Take them when this
+        // read has them, but never drop what a good read already gave (#2685).
+        if (currentTagData) setDisplayedTagData(currentTagData);
+        if (currentTrayUuid) setDisplayedTrayUuid(currentTrayUuid);
       }
 
       // Update weight when stable and card is visible
