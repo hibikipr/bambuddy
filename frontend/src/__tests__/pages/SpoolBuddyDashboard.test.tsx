@@ -962,6 +962,62 @@ describe('SpoolBuddyDashboard', () => {
       });
     });
 
+    it('keeps the tag data when the same tag comes back with a failed read', async () => {
+      // Good read first, the spool is lifted and put back, and that read fails
+      // (no blocks): the card and Quick Add must keep the first read's spool.
+      const { api } = await import('../../api/client');
+      await setSpoolmanMode(false);
+      const setterRef: { current: React.Dispatch<React.SetStateAction<typeof mockOutletContext.sbState>> | null } = { current: null };
+      function DynWrapper() {
+        const [sbState, setSbState] = React.useState({
+          ...mockOutletContext.sbState,
+          unknownTagUid: '865947E2',
+          unknownTrayUuid: TRAY_UUID as string | null,
+          unknownTagData: TAG_DATA as UnknownTagData | null,
+        });
+        setterRef.current = setSbState;
+        return <Outlet context={{ ...mockOutletContext, sbState }} />;
+      }
+      const qc = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+      render(
+        <ToastProvider>
+          <QueryClientProvider client={qc}>
+            <MemoryRouter initialEntries={['/spoolbuddy']}>
+              <Routes>
+                <Route element={<DynWrapper />}>
+                  <Route path="spoolbuddy" element={<SpoolBuddyDashboard />} />
+                </Route>
+              </Routes>
+            </MemoryRouter>
+          </QueryClientProvider>
+        </ToastProvider>
+      );
+
+      // Good read: the card names the spool
+      await waitFor(() => expect(screen.getByText('Bambu Lab PLA Basic')).toBeDefined());
+
+      // Lifted off the reader, then placed again and the read fails
+      act(() => setterRef.current!((prev) => ({ ...prev, unknownTagUid: null, unknownTrayUuid: null, unknownTagData: null })));
+      act(() => setterRef.current!((prev) => ({ ...prev, unknownTagUid: '865947E2', unknownTrayUuid: null, unknownTagData: null })));
+
+      await waitFor(() => expect(screen.getByText('865947E2')).toBeDefined());
+      expect(screen.getByText('Bambu Lab PLA Basic')).toBeDefined();
+      fireEvent.click(screen.getAllByText('Add to Inventory')[0]);
+      fireEvent.click(await waitFor(() => screen.getByText('Add')));
+
+      await waitFor(() => expect(api.createSpool).toHaveBeenCalledTimes(1));
+      expect((api.createSpool as ReturnType<typeof vi.fn>).mock.calls[0][0]).toMatchObject({
+        material: 'PLA',
+        subtype: 'Basic',
+        color_name: 'Cyan',
+        brand: 'Bambu Lab',
+        core_weight: 216,
+        tag_uid: '865947E2',
+        tray_uuid: TRAY_UUID,
+        tag_type: 'bambulab',
+      });
+    });
+
     it('creates that spool in local mode, with its tray UUID and catalog tare', async () => {
       const { api } = await import('../../api/client');
       await setSpoolmanMode(false);
